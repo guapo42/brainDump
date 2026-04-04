@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+from datetime import date, timedelta
 
 from dotenv import load_dotenv
 
@@ -60,7 +61,58 @@ def cmd_query(args):
     pipeline = get_pipeline()
     question = args.question.lower()
 
-    if "waiting" in question or "blocked" in question or "hanging" in question:
+    if "my tasks" in question or "assigned to me" in question:
+        print("--- My Tasks ---")
+        results = pipeline.graph.query_tasks_by_assignee("You")
+        if not results:
+            print("  No pending tasks found.")
+        for r in results:
+            due = f" (due {r['due_date']})" if r.get("due_date") else ""
+            proj = f" [{r['project']}]" if r.get("project") else ""
+            blocked = f" (blocked by {r['blocked_by']})" if r.get("blocked_by") else ""
+            print(f"  - [{r['priority']}] {r['task']}{proj}{due}{blocked}")
+
+    elif "due this week" in question or "due today" in question:
+        today = date.today()
+        week_end = today + timedelta(days=(6 - today.weekday()))
+        print(f"--- Tasks Due {today.isoformat()} to {week_end.isoformat()} ---")
+        results = pipeline.graph.query_tasks_due_between(
+            today.isoformat(), week_end.isoformat()
+        )
+        if not results:
+            print("  No tasks due this week.")
+        for r in results:
+            assignee = f" [{r['assignee']}]" if r.get("assignee") else ""
+            print(f"  - {r['task']}{assignee} due {r['due_date']}")
+
+    elif "overdue" in question:
+        today = date.today().isoformat()
+        print("--- Overdue Tasks ---")
+        results = pipeline.graph.query_overdue_tasks(today)
+        if not results:
+            print("  No overdue tasks.")
+        for r in results:
+            assignee = f" [{r['assignee']}]" if r.get("assignee") else ""
+            blocked = f" (blocked by {r['blocked_by']})" if r.get("blocked_by") else ""
+            print(f"  - {r['task']}{assignee} was due {r['due_date']}{blocked}")
+
+    elif "owe" in question or "from" in question:
+        # Extract person name: "what do I owe Linda" or "tasks from Robert"
+        for name_part in question.split():
+            if name_part[0:1].isupper() or name_part in ("linda", "robert", "sarah", "marcus", "priya"):
+                # Try to match partial names
+                sender = name_part.capitalize()
+                print(f"--- Tasks Requested by {sender}* ---")
+                # Search with partial match
+                results = pipeline.graph.query_tasks_from_sender(sender)
+                if not results:
+                    print(f"  No pending tasks from {sender}.")
+                for r in results:
+                    due = f" (due {r['due_date']})" if r.get("due_date") else ""
+                    print(f"  - [{r['priority']}] {r['task']}{due}")
+                break
+
+    elif "waiting" in question or "blocked" in question or "hanging" in question:
         print("--- Blocked / Hanging Tasks ---")
         results = pipeline.graph.query_hanging_tasks()
         if not results:
