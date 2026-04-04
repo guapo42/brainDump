@@ -1,0 +1,17 @@
+From: Alex Vance <avance@rti.org>
+To: You
+Date: February 26, 2026
+Subject: URGENT: Blockers on the dbt pipeline for the EPA dataset
+
+Hi team,
+
+We are running into a few critical blockers on the EPA Data Modernization project. 
+
+I am currently waiting on Sarah to provision the new AWS EC2 instances and hand over the S3 bucket access keys. She mentioned she should have that done by Monday, March 2nd. 
+
+Once Sarah provides those keys, I need you to finalize the Postgres schema optimization and deploy the new dbt models. This is high priority. The client expects the automated pipeline to be fully functional for their UAT phase starting on March 6th, so your tasks must be completed by end-of-day March 5th. 
+
+Additionally, Marcus is supposed to write the Python extraction scripts, but he can't start until you finish the schema. Let's make sure we don't hold him up.
+
+Thanks,
+Alex

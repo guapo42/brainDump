@@ -1,0 +1,18 @@
+From: TechSolutions Vendor Support <support@techsolutions.io>
+To: You
+Cc: Finance Team <finance@company.com>; Jessica Smith <jsmith@company.com>
+Date: February 26, 2026
+Subject: ACTION REQUIRED: Invoice 4922 and Phase 2 Kickoff (Project Phoenix)
+
+Hello,
+
+We are ready to kick off Phase 2 of Project Phoenix, but we have a hard stop on our end. 
+
+Our engineering team cannot begin the backend integration until your Finance team (specifically Jessica) clears Invoice 4922 from Phase 1. Jessica, can you please expedite this payment by March 3rd?
+
+Separately, we need your approval on the UX wireframes sent last Tuesday. We are waiting on your final sign-off. If you do not approve the wireframes by March 5th, the target launch date of April 15th is at severe risk.
+
+Let us know if you have any questions.
+
+Regards,
+TechSolutions Team
