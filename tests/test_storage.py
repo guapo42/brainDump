@@ -2,8 +2,24 @@
 
 from unittest.mock import MagicMock, patch
 
-from core.graph_engine import GraphStore, UPSERT_CYPHER
+from core.graph_engine import (
+    GraphStore,
+    UPSERT_CYPHER,
+    TASKS_BY_ASSIGNEE_CYPHER,
+    TASKS_DUE_BETWEEN_CYPHER,
+    TASKS_FROM_SENDER_CYPHER,
+    OVERDUE_TASKS_CYPHER,
+)
 from core.vector_engine import VectorStore
+
+
+def _mock_graph_store():
+    """Create a GraphStore with a mocked Neo4j driver."""
+    mock_session = MagicMock()
+    mock_driver = MagicMock()
+    mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+    return mock_driver, mock_session
 
 
 class TestGraphStore:
@@ -11,22 +27,16 @@ class TestGraphStore:
         self, sample_source_metadata, sample_extraction_result
     ):
         """Verify the correct Cypher and params are sent to Neo4j."""
-        # Mock the Neo4j driver
-        mock_session = MagicMock()
-        mock_driver = MagicMock()
-        mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+        mock_driver, mock_session = _mock_graph_store()
 
         with patch("core.graph_engine.GraphDatabase.driver", return_value=mock_driver):
             store = GraphStore(uri="bolt://fake:7687", user="neo4j", password="test")
             store.upsert_extraction(sample_source_metadata, sample_extraction_result)
 
-        # session.run should have been called with our UPSERT_CYPHER
         mock_session.run.assert_called_once()
         call_args = mock_session.run.call_args
         assert call_args.args[0] == UPSERT_CYPHER
 
-        # Check params
         kwargs = call_args.kwargs
         assert kwargs["source_id"] == "email_001"
         assert kwargs["platform"] == "gmail"
@@ -38,15 +48,8 @@ class TestGraphStore:
     def test_query_hanging_tasks(self):
         """Verify hanging tasks query returns list of dicts."""
         mock_record = {"task": "Fix bug", "waiting_on": "Alice", "due_date": None, "priority": "high"}
-        mock_result = MagicMock()
-        mock_result.__iter__ = MagicMock(return_value=iter([mock_record]))
-
-        mock_session = MagicMock()
-        mock_session.run.return_value = mock_result
-
-        mock_driver = MagicMock()
-        mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+        mock_driver, mock_session = _mock_graph_store()
+        mock_session.run.return_value = MagicMock(__iter__=MagicMock(return_value=iter([mock_record])))
 
         with patch("core.graph_engine.GraphDatabase.driver", return_value=mock_driver):
             store = GraphStore(uri="bolt://fake:7687", user="neo4j", password="test")
@@ -54,6 +57,69 @@ class TestGraphStore:
 
         assert len(results) == 1
         assert results[0]["waiting_on"] == "Alice"
+
+    def test_query_tasks_by_assignee(self):
+        """REC-5: Verify assignee query uses correct Cypher."""
+        mock_record = {"task": "Write docs", "status": "pending", "due_date": "2026-03-01",
+                       "priority": "medium", "project": "Phoenix", "blocked_by": None}
+        mock_driver, mock_session = _mock_graph_store()
+        mock_session.run.return_value = MagicMock(__iter__=MagicMock(return_value=iter([mock_record])))
+
+        with patch("core.graph_engine.GraphDatabase.driver", return_value=mock_driver):
+            store = GraphStore(uri="bolt://fake:7687", user="neo4j", password="test")
+            results = store.query_tasks_by_assignee("You")
+
+        mock_session.run.assert_called_once_with(TASKS_BY_ASSIGNEE_CYPHER, person_name="You")
+        assert len(results) == 1
+        assert results[0]["task"] == "Write docs"
+
+    def test_query_tasks_due_between(self):
+        """REC-6: Verify date-range query uses correct Cypher."""
+        mock_record = {"task": "Deploy", "status": "pending", "due_date": "2026-03-05",
+                       "priority": "high", "assignee": "You", "project": "Phoenix"}
+        mock_driver, mock_session = _mock_graph_store()
+        mock_session.run.return_value = MagicMock(__iter__=MagicMock(return_value=iter([mock_record])))
+
+        with patch("core.graph_engine.GraphDatabase.driver", return_value=mock_driver):
+            store = GraphStore(uri="bolt://fake:7687", user="neo4j", password="test")
+            results = store.query_tasks_due_between("2026-03-01", "2026-03-07")
+
+        mock_session.run.assert_called_once_with(
+            TASKS_DUE_BETWEEN_CYPHER, start_date="2026-03-01", end_date="2026-03-07"
+        )
+        assert len(results) == 1
+
+    def test_query_tasks_from_sender(self):
+        """REC-7: Verify sender query uses correct Cypher."""
+        mock_record = {"task": "Submit timesheet", "status": "pending", "due_date": "2026-01-16",
+                       "priority": "medium", "assignee": "You", "requested_at": "2026-01-05"}
+        mock_driver, mock_session = _mock_graph_store()
+        mock_session.run.return_value = MagicMock(__iter__=MagicMock(return_value=iter([mock_record])))
+
+        with patch("core.graph_engine.GraphDatabase.driver", return_value=mock_driver):
+            store = GraphStore(uri="bolt://fake:7687", user="neo4j", password="test")
+            results = store.query_tasks_from_sender("Linda Torres")
+
+        mock_session.run.assert_called_once_with(
+            TASKS_FROM_SENDER_CYPHER, sender_name="Linda Torres"
+        )
+        assert len(results) == 1
+
+    def test_query_overdue_tasks(self):
+        """REC-8: Verify overdue query uses correct Cypher."""
+        mock_record = {"task": "Fix bug", "status": "pending", "due_date": "2026-02-01",
+                       "priority": "high", "assignee": "You", "project": "EPA",
+                       "blocked_by": None}
+        mock_driver, mock_session = _mock_graph_store()
+        mock_session.run.return_value = MagicMock(__iter__=MagicMock(return_value=iter([mock_record])))
+
+        with patch("core.graph_engine.GraphDatabase.driver", return_value=mock_driver):
+            store = GraphStore(uri="bolt://fake:7687", user="neo4j", password="test")
+            results = store.query_overdue_tasks("2026-03-01")
+
+        mock_session.run.assert_called_once_with(OVERDUE_TASKS_CYPHER, today="2026-03-01")
+        assert len(results) == 1
+        assert results[0]["task"] == "Fix bug"
 
 
 class TestVectorStore:
