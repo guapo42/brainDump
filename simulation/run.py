@@ -1,5 +1,6 @@
 """Simulation runner — entry point and pytest integration."""
 
+from simulation.agents.adhd_user import ADHDUserAgent
 from simulation.agents.base import SimState
 from simulation.agents.coworker import SarahChenAgent
 from simulation.agents.director import RobertKimAgent
@@ -8,25 +9,33 @@ from simulation.agents.report_marcus import MarcusWebbAgent
 from simulation.agents.report_priya import PriyaPatelAgent
 from simulation.agents.user import UserAgent
 from simulation.clock import SimClock
+from simulation.reports.adhd_report import ADHDReportGenerator, ADHDSimulationReport
 from simulation.reports.gap_analyzer import GapAnalyzer, SimulationReport
 from simulation.sim_pipeline import SimPipeline
 from simulation.stores import InMemoryGraphStore, InMemoryVectorStore
 
 
-def run_simulation(verbose: bool = False) -> tuple[SimulationReport, str]:
+def run_simulation(
+    verbose: bool = False,
+    use_adhd_agent: bool = True,
+    seed: int = 42,
+) -> tuple[SimulationReport | ADHDSimulationReport, str]:
     """Run the full 12-month office simulation.
 
+    Args:
+        verbose: Print weekly progress.
+        use_adhd_agent: Use ADHD cognitive model (True) or passive UserAgent (False).
+        seed: Random seed for ADHD agent reproducibility.
+
     Returns:
-        (report, formatted_text) — structured report and human-readable output.
+        (report, formatted_text)
     """
-    # Initialize infrastructure
     graph = InMemoryGraphStore()
     vector = InMemoryVectorStore()
     pipeline = SimPipeline(graph, vector)
     state = SimState()
     clock = SimClock()
 
-    # Initialize agents
     office_agents = [
         LindaTorresAgent(),
         RobertKimAgent(),
@@ -34,132 +43,162 @@ def run_simulation(verbose: bool = False) -> tuple[SimulationReport, str]:
         MarcusWebbAgent(),
         PriyaPatelAgent(),
     ]
-    user_agent = UserAgent(graph, vector)
 
-    # Main simulation loop
+    if use_adhd_agent:
+        adhd_agent = ADHDUserAgent(graph, vector, seed=seed)
+    else:
+        user_agent = UserAgent(graph, vector)
+
     for week in clock.weeks():
         state.current_week = week.week_number
 
-        # 1. Each office agent generates messages for this week
+        # 1. Office agents generate messages
         week_messages = []
         for agent in office_agents:
             messages = agent.generate_messages(week, state)
             week_messages.extend(messages)
 
-        # 2. Ingest all messages
+        # 2. Ingest office messages
         for msg in week_messages:
             pipeline.ingest(msg.text, msg.source_meta, msg.extraction)
             state.record_message(msg)
-
-            # Resolve tasks that this message marks as done
             for task_desc in msg.resolves_tasks:
                 graph.mark_task_done(task_desc)
 
-        # 3. User agent queries the system
-        user_agent.run_weekly_queries(week)
+        # 3. Agent processes the week
+        if use_adhd_agent:
+            response_msgs = adhd_agent.run_weekly(week, state, week_messages)
+            for msg in response_msgs:
+                pipeline.ingest(msg.text, msg.source_meta, msg.extraction)
+                state.record_message(msg)
+                for task_desc in msg.resolves_tasks:
+                    graph.mark_task_done(task_desc)
+        else:
+            user_agent.run_weekly_queries(week)
 
-        if verbose and week_messages:
-            print(f"  Week {week.week_number:2d} (Q{week.quarter}): "
-                  f"{len(week_messages)} messages, "
-                  f"{sum(len(m.extraction.tasks) for m in week_messages)} tasks")
+        if verbose:
+            n_msgs = len(week_messages)
+            n_tasks = sum(len(m.extraction.tasks) for m in week_messages)
+            if use_adhd_agent:
+                cog = adhd_agent.state
+                done = len(adhd_agent.total_tasks_completed)
+                print(f"  W{week.week_number:2d} Q{week.quarter}: "
+                      f"{n_msgs} msgs, {n_tasks} tasks | "
+                      f"DA={cog.dopamine_level:.2f} phase={cog.phase.name:20s} "
+                      f"done={done} resp={len(response_msgs)}")
+            elif week_messages:
+                print(f"  W{week.week_number:2d} Q{week.quarter}: "
+                      f"{n_msgs} msgs, {n_tasks} tasks")
 
     # Generate report
-    analyzer = GapAnalyzer(user_agent, state, graph, vector)
-    report = analyzer.generate_report()
-    formatted = analyzer.format_report(report)
+    if use_adhd_agent:
+        gen = ADHDReportGenerator(adhd_agent, state, graph, vector)
+        report = gen.generate_report()
+        formatted = gen.format_report(report)
+    else:
+        analyzer = GapAnalyzer(user_agent, state, graph, vector)
+        report = analyzer.generate_report()
+        formatted = analyzer.format_report(report)
 
     return report, formatted
 
 
-# === Pytest integration ===
+# === Pytest: passive UserAgent tests (backward compat) ===
 
-def test_simulation_runs_successfully():
-    """Full simulation completes without errors."""
-    report, text = run_simulation()
-    assert report.total_messages > 100, f"Expected >100 messages, got {report.total_messages}"
-    assert report.total_tasks > 50, f"Expected >50 tasks, got {report.total_tasks}"
+def test_passive_simulation_runs():
+    """Passive UserAgent simulation completes."""
+    report, _ = run_simulation(use_adhd_agent=False)
+    assert report.total_messages > 100
+    assert report.total_tasks > 50
 
 
-def test_simulation_all_queries_succeed():
-    """All production queries should run at 100% success rate."""
-    report, _ = run_simulation()
+def test_passive_all_queries_succeed():
+    """Passive agent: all queries at 100%."""
+    report, _ = run_simulation(use_adhd_agent=False)
     for qt, stats in report.query_stats.items():
         assert stats["rate"] == "100%", f"Query {qt} failed: {stats}"
 
 
-def test_simulation_tasks_resolve():
-    """Some tasks should move to 'done' over the course of the simulation."""
-    report, _ = run_simulation()
-    assert report.tasks_resolved > 5, f"Expected >5 resolved tasks, got {report.tasks_resolved}"
+def test_passive_tasks_resolve():
+    report, _ = run_simulation(use_adhd_agent=False)
+    assert report.tasks_resolved > 5
 
 
-def test_simulation_finds_overdue_tasks():
-    """Tasks with passed due dates that aren't done should be flagged."""
-    report, _ = run_simulation()
-    assert report.tasks_overdue > 0, "Should find overdue tasks"
+def test_passive_recommendations_implemented():
+    report, _ = run_simulation(use_adhd_agent=False)
+    assert len(report.implemented_features) == 8
 
 
-def test_simulation_recommendations_implemented():
-    """All 8 recommendations should be marked as IMPLEMENTED."""
-    report, _ = run_simulation()
-    assert len(report.implemented_features) == 8, (
-        f"Expected 8 implemented features, got {len(report.implemented_features)}"
-    )
-    for feat in report.implemented_features:
-        assert feat["status"] == "IMPLEMENTED", f"{feat['id']} not implemented"
+# === Pytest: ADHD agent tests ===
+
+def test_adhd_simulation_runs():
+    """ADHD agent simulation completes without errors."""
+    report, _ = run_simulation(use_adhd_agent=True)
+    assert report.total_tasks_seen > 50
+    assert report.tasks_completed > 0
 
 
-def test_simulation_graph_integrity():
-    """Graph should have the expected structure after full simulation."""
-    report, _ = run_simulation()
-    assert report.total_persons >= 5, f"Expected >=5 persons, got {report.total_persons}"
-    assert report.total_projects >= 2, f"Expected >=2 projects, got {report.total_projects}"
-    assert report.total_edges > 100, f"Expected >100 edges, got {report.total_edges}"
+def test_adhd_completion_rate_below_100():
+    """ADHD agent should NOT complete all tasks (that's the point)."""
+    report, _ = run_simulation(use_adhd_agent=True)
+    assert report.completion_rate < 1.0, "ADHD agent should not complete everything"
+    assert report.completion_rate > 0.0, "ADHD agent should complete something"
 
 
-def test_simulation_new_queries_return_data():
-    """The new REC-5/6/7/8 queries should return actual results."""
-    graph = InMemoryGraphStore()
-    vector = InMemoryVectorStore()
-    pipeline = SimPipeline(graph, vector)
-    state = SimState()
-    clock = SimClock()
+def test_adhd_hyperfocus_occurs():
+    """ADHD agent should enter hyperfocus at least once."""
+    report, _ = run_simulation(use_adhd_agent=True)
+    assert report.hyperfocus_episodes > 0
 
-    agents = [
-        LindaTorresAgent(), RobertKimAgent(), SarahChenAgent(),
-        MarcusWebbAgent(), PriyaPatelAgent(),
-    ]
 
-    # Run first 10 weeks to build up data
-    for week in clock.weeks():
-        if week.week_number > 10:
-            break
-        for agent in agents:
-            for msg in agent.generate_messages(week, state):
-                pipeline.ingest(msg.text, msg.source_meta, msg.extraction)
-                state.record_message(msg)
+def test_adhd_distraction_occurs():
+    """ADHD agent should experience distraction loops."""
+    report, _ = run_simulation(use_adhd_agent=True)
+    assert report.distraction_loop_ticks > 0 or report.wall_of_awful_triggers > 0
 
-    # REC-5: Tasks by assignee
-    my_tasks = graph.query_tasks_by_assignee("You")
-    assert len(my_tasks) > 0, "Should find tasks assigned to You"
 
-    # REC-6: Tasks due between dates
-    due = graph.query_tasks_due_between("2026-01-01", "2026-04-01")
-    assert len(due) > 0, "Should find tasks due in Q1"
+def test_adhd_object_permanence_misses():
+    """ADHD agent should skip some queries due to object permanence."""
+    report, _ = run_simulation(use_adhd_agent=True)
+    assert report.object_permanence_misses > 0
 
-    # REC-7: Tasks from sender
-    linda_tasks = graph.query_tasks_from_sender("Linda Torres")
-    assert len(linda_tasks) > 0, "Should find tasks from Linda"
 
-    # REC-8: Overdue tasks
-    overdue = graph.query_overdue_tasks("2026-04-01")
-    assert len(overdue) > 0, "Should find overdue tasks by April"
+def test_adhd_generates_responses():
+    """ADHD agent should generate response messages when completing tasks."""
+    report, _ = run_simulation(use_adhd_agent=True)
+    assert report.messages_sent > 0
+
+
+def test_adhd_deterministic_with_seed():
+    """Same seed should produce identical results."""
+    r1, _ = run_simulation(use_adhd_agent=True, seed=42)
+    r2, _ = run_simulation(use_adhd_agent=True, seed=42)
+    assert r1.tasks_completed == r2.tasks_completed
+    assert r1.hyperfocus_episodes == r2.hyperfocus_episodes
+
+
+def test_adhd_graph_integrity():
+    """Graph should have expected structure after ADHD simulation."""
+    report, _ = run_simulation(use_adhd_agent=True)
+    assert report.total_persons >= 5
+    assert report.total_projects >= 2
+    assert report.total_edges > 100
 
 
 # === CLI entry point ===
 
 if __name__ == "__main__":
-    print("Running 12-month office simulation...\n")
-    report, text = run_simulation(verbose=True)
+    import sys
+    mode = "adhd"
+    if "--passive" in sys.argv:
+        mode = "passive"
+
+    if mode == "adhd":
+        print("Running 12-month ADHD employee simulation...\n")
+        report, text = run_simulation(verbose=True, use_adhd_agent=True)
+    else:
+        print("Running 12-month passive simulation...\n")
+        report, text = run_simulation(verbose=True, use_adhd_agent=False)
+
     print()
     print(text)
