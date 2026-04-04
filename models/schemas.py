@@ -28,6 +28,7 @@ class PersonEntity(BaseModel):
     name: str = Field(..., description="Full name of the person")
     email: Optional[str] = Field(None, description="Email if available")
     role: Optional[str] = Field(None, description="Role or title if mentioned")
+    aliases: List[str] = Field(default_factory=list, description="Alternate names (e.g. first name only)")
 
 
 class ProjectEntity(BaseModel):

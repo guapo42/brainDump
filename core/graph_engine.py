@@ -5,7 +5,10 @@ from neo4j import GraphDatabase
 from models.schemas import ExtractionResult, SourceMetadata
 
 
-# Cypher for upserting the full extraction into the graph
+# REC-3: Composite MERGE key (description + project) prevents false merges.
+# REC-1: REQUESTED_BY relationship links source sender to generated tasks.
+# REC-2: updated_at timestamp set on every upsert.
+# REC-4: Person MERGE on email when available, alias tracking.
 UPSERT_CYPHER = """\
 // Create the Source node (PROV-O provenance record)
 MERGE (src:Source {id: $source_id})
@@ -14,12 +17,27 @@ SET src.platform = $platform,
     src.sender_email = $sender_email,
     src.received_at = $received_at
 
-// Create Person nodes
+// Create Person nodes — MERGE on email when available (REC-4)
 WITH src
 UNWIND $people AS person_data
-MERGE (p:Person {name: person_data.name})
-SET p.email = coalesce(person_data.email, p.email),
-    p.role = coalesce(person_data.role, p.role)
+CALL {
+    WITH person_data
+    WITH person_data
+    WHERE person_data.email IS NOT NULL
+    MERGE (p:Person {email: person_data.email})
+    SET p.name = person_data.name,
+        p.role = coalesce(person_data.role, p.role),
+        p.aliases = coalesce(person_data.aliases, p.aliases)
+    RETURN p
+  UNION
+    WITH person_data
+    WITH person_data
+    WHERE person_data.email IS NULL
+    MERGE (p:Person {name: person_data.name})
+    SET p.role = coalesce(person_data.role, p.role),
+        p.aliases = coalesce(person_data.aliases, p.aliases)
+    RETURN p
+}
 
 // Create Project nodes
 WITH src
@@ -28,17 +46,36 @@ MERGE (proj:Project {name: proj_data.name})
 SET proj.status = proj_data.status,
     proj.priority = proj_data.priority
 
-// Create Tasks with relationships
+// Create Tasks — MERGE on composite key description+project (REC-3)
 WITH src
 UNWIND $tasks AS task_data
-MERGE (t:Task {description: task_data.description})
+CALL {
+    WITH task_data
+    WITH task_data
+    WHERE task_data.project IS NOT NULL
+    MERGE (t:Task {description: task_data.description, project: task_data.project})
+    RETURN t
+  UNION
+    WITH task_data
+    WITH task_data
+    WHERE task_data.project IS NULL
+    MERGE (t:Task {description: task_data.description})
+    RETURN t
+}
 SET t.status = task_data.status,
     t.due_date = task_data.due_date,
     t.priority = task_data.priority,
-    t.created_at = coalesce(t.created_at, datetime())
+    t.created_at = coalesce(t.created_at, datetime()),
+    t.updated_at = datetime()
 
 // Source -[:GENERATED]-> Task (PROV-O link)
 MERGE (src)-[:GENERATED]->(t)
+
+// Source sender -[:REQUESTED_BY]-> Person (REC-1)
+WITH src, t
+MATCH (requester:Person)
+WHERE requester.name = src.sender_name OR requester.email = src.sender_email
+MERGE (t)-[:REQUESTED_BY]->(requester)
 
 // Task -[:PART_OF]-> Project
 WITH t, task_data
@@ -78,6 +115,51 @@ RETURN proj.name AS project, t.description AS task, t.status AS status,
 ORDER BY proj.name, t.status
 """
 
+# REC-5: Tasks assigned to a specific person
+TASKS_BY_ASSIGNEE_CYPHER = """\
+MATCH (p:Person)-[:ASSIGNED_TO]->(t:Task)
+WHERE p.name = $person_name AND t.status <> 'done'
+OPTIONAL MATCH (t)-[:PART_OF]->(proj:Project)
+OPTIONAL MATCH (t)-[:WAITING_ON]->(blocker:Person)
+RETURN t.description AS task, t.status AS status, t.due_date AS due_date,
+       t.priority AS priority, proj.name AS project, blocker.name AS blocked_by
+ORDER BY t.priority DESC, t.due_date ASC
+"""
+
+# REC-6: Tasks due within a date range
+TASKS_DUE_BETWEEN_CYPHER = """\
+MATCH (t:Task)
+WHERE t.due_date >= $start_date AND t.due_date <= $end_date AND t.status <> 'done'
+OPTIONAL MATCH (assignee:Person)-[:ASSIGNED_TO]->(t)
+OPTIONAL MATCH (t)-[:PART_OF]->(proj:Project)
+RETURN t.description AS task, t.status AS status, t.due_date AS due_date,
+       t.priority AS priority, assignee.name AS assignee, proj.name AS project
+ORDER BY t.due_date ASC
+"""
+
+# REC-7: Tasks originating from a specific sender's messages
+TASKS_FROM_SENDER_CYPHER = """\
+MATCH (src:Source)-[:GENERATED]->(t:Task)
+WHERE src.sender_name = $sender_name AND t.status <> 'done'
+OPTIONAL MATCH (assignee:Person)-[:ASSIGNED_TO]->(t)
+RETURN t.description AS task, t.status AS status, t.due_date AS due_date,
+       t.priority AS priority, assignee.name AS assignee, src.received_at AS requested_at
+ORDER BY src.received_at DESC
+"""
+
+# REC-8: Overdue tasks (due date in the past, not done)
+OVERDUE_TASKS_CYPHER = """\
+MATCH (t:Task)
+WHERE t.due_date < $today AND t.status <> 'done'
+OPTIONAL MATCH (assignee:Person)-[:ASSIGNED_TO]->(t)
+OPTIONAL MATCH (t)-[:PART_OF]->(proj:Project)
+OPTIONAL MATCH (t)-[:WAITING_ON]->(blocker:Person)
+RETURN t.description AS task, t.status AS status, t.due_date AS due_date,
+       t.priority AS priority, assignee.name AS assignee, proj.name AS project,
+       blocker.name AS blocked_by
+ORDER BY t.due_date ASC
+"""
+
 
 class GraphStore:
     """Interface to Neo4j for upserting and querying the knowledge graph."""
@@ -115,4 +197,28 @@ class GraphStore:
         """Get a full overview of tasks grouped by project."""
         with self.driver.session() as session:
             result = session.run(PROJECT_OVERVIEW_CYPHER)
+            return [dict(record) for record in result]
+
+    def query_tasks_by_assignee(self, person_name: str) -> list[dict]:
+        """Find all pending tasks assigned to a specific person (REC-5)."""
+        with self.driver.session() as session:
+            result = session.run(TASKS_BY_ASSIGNEE_CYPHER, person_name=person_name)
+            return [dict(record) for record in result]
+
+    def query_tasks_due_between(self, start_date: str, end_date: str) -> list[dict]:
+        """Find tasks due within a date range (REC-6)."""
+        with self.driver.session() as session:
+            result = session.run(TASKS_DUE_BETWEEN_CYPHER, start_date=start_date, end_date=end_date)
+            return [dict(record) for record in result]
+
+    def query_tasks_from_sender(self, sender_name: str) -> list[dict]:
+        """Find tasks generated from a specific sender's messages (REC-7)."""
+        with self.driver.session() as session:
+            result = session.run(TASKS_FROM_SENDER_CYPHER, sender_name=sender_name)
+            return [dict(record) for record in result]
+
+    def query_overdue_tasks(self, today: str) -> list[dict]:
+        """Find tasks past their due date that aren't done (REC-8)."""
+        with self.driver.session() as session:
+            result = session.run(OVERDUE_TASKS_CYPHER, today=today)
             return [dict(record) for record in result]
