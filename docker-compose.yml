@@ -1,0 +1,25 @@
+services:
+  # Graph Database: Neo4j
+  neo4j:
+    image: neo4j:latest
+    container_name: sentinel_neo4j
+    ports:
+      - "7474:7474" # HTTP Browser
+      - "7687:7687" # Bolt Protocol (Python driver)
+    environment:
+      - NEO4J_AUTH=neo4j/password_here # Replace with a secure password
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - ./data/neo4j:/data
+      - ./logs/neo4j:/logs
+
+  # Vector Database: ChromaDB
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: sentinel_chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/chroma:/chroma/data
+    environment:
+      - IS_PERSISTENT=TRUE
