@@ -80,16 +80,11 @@ def test_simulation_runs_successfully():
     assert report.total_tasks > 50, f"Expected >50 tasks, got {report.total_tasks}"
 
 
-def test_simulation_detects_gaps():
-    """The UserAgent detects known system gaps."""
+def test_simulation_all_queries_succeed():
+    """All production queries should run at 100% success rate."""
     report, _ = run_simulation()
-    gap_ids = {g["id"] for g in report.gaps}
-
-    # These gaps should always be detected
-    assert "GAP-1" in gap_ids, "Should detect missing query_tasks_by_assignee"
-    assert "GAP-2" in gap_ids, "Should detect missing query_tasks_due_between"
-    assert "GAP-3" in gap_ids, "Should detect missing query_tasks_from_sender"
-    assert "GAP-5" in gap_ids, "Should detect missing weekly summary query"
+    for qt, stats in report.query_stats.items():
+        assert stats["rate"] == "100%", f"Query {qt} failed: {stats}"
 
 
 def test_simulation_tasks_resolve():
@@ -104,16 +99,14 @@ def test_simulation_finds_overdue_tasks():
     assert report.tasks_overdue > 0, "Should find overdue tasks"
 
 
-def test_simulation_produces_recommendations():
-    """The gap analyzer should produce actionable recommendations."""
+def test_simulation_recommendations_implemented():
+    """All 8 recommendations should be marked as IMPLEMENTED."""
     report, _ = run_simulation()
-    assert len(report.recommendations) >= 6, (
-        f"Expected >=6 recommendations, got {len(report.recommendations)}"
+    assert len(report.implemented_features) == 8, (
+        f"Expected 8 implemented features, got {len(report.implemented_features)}"
     )
-    # Check critical recommendations exist
-    rec_ids = {r["id"] for r in report.recommendations}
-    assert "REC-5" in rec_ids, "Should recommend query_tasks_by_assignee"
-    assert "REC-6" in rec_ids, "Should recommend query_tasks_due_between"
+    for feat in report.implemented_features:
+        assert feat["status"] == "IMPLEMENTED", f"{feat['id']} not implemented"
 
 
 def test_simulation_graph_integrity():
@@ -122,6 +115,45 @@ def test_simulation_graph_integrity():
     assert report.total_persons >= 5, f"Expected >=5 persons, got {report.total_persons}"
     assert report.total_projects >= 2, f"Expected >=2 projects, got {report.total_projects}"
     assert report.total_edges > 100, f"Expected >100 edges, got {report.total_edges}"
+
+
+def test_simulation_new_queries_return_data():
+    """The new REC-5/6/7/8 queries should return actual results."""
+    graph = InMemoryGraphStore()
+    vector = InMemoryVectorStore()
+    pipeline = SimPipeline(graph, vector)
+    state = SimState()
+    clock = SimClock()
+
+    agents = [
+        LindaTorresAgent(), RobertKimAgent(), SarahChenAgent(),
+        MarcusWebbAgent(), PriyaPatelAgent(),
+    ]
+
+    # Run first 10 weeks to build up data
+    for week in clock.weeks():
+        if week.week_number > 10:
+            break
+        for agent in agents:
+            for msg in agent.generate_messages(week, state):
+                pipeline.ingest(msg.text, msg.source_meta, msg.extraction)
+                state.record_message(msg)
+
+    # REC-5: Tasks by assignee
+    my_tasks = graph.query_tasks_by_assignee("You")
+    assert len(my_tasks) > 0, "Should find tasks assigned to You"
+
+    # REC-6: Tasks due between dates
+    due = graph.query_tasks_due_between("2026-01-01", "2026-04-01")
+    assert len(due) > 0, "Should find tasks due in Q1"
+
+    # REC-7: Tasks from sender
+    linda_tasks = graph.query_tasks_from_sender("Linda Torres")
+    assert len(linda_tasks) > 0, "Should find tasks from Linda"
+
+    # REC-8: Overdue tasks
+    overdue = graph.query_overdue_tasks("2026-04-01")
+    assert len(overdue) > 0, "Should find overdue tasks by April"
 
 
 # === CLI entry point ===

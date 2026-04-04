@@ -8,38 +8,62 @@ from models.schemas import ExtractionResult, SourceMetadata
 class InMemoryGraphStore:
     """Replicates Neo4j MERGE semantics using plain Python dicts.
 
-    Data structures mirror the Cypher UPSERT_CYPHER logic:
-    - MERGE on Source.id, Person.name, Project.name, Task.description
-    - Relationships stored as (from_label, from_key, rel, to_label, to_key)
+    Updated to match production GraphStore after REC-1 through REC-8:
+    - REC-1: REQUESTED_BY edges from source sender to generated tasks
+    - REC-2: updated_at timestamp on tasks
+    - REC-3: Composite task key (description + project)
+    - REC-4: Person MERGE on email when available, alias tracking
+    - REC-5/6/7/8: New query methods now in production
     """
 
     def __init__(self):
         self.sources: dict[str, dict] = {}
-        self.persons: dict[str, dict] = {}
+        self.persons: dict[str, dict] = {}          # key = canonical name
+        self._email_to_name: dict[str, str] = {}    # REC-4: email -> canonical name
         self.projects: dict[str, dict] = {}
-        self.tasks: dict[str, dict] = {}
+        self.tasks: dict[str, dict] = {}             # key = "desc||project" or "desc||"
         self.edges: list[tuple[str, str, str, str, str]] = []
+
+    @staticmethod
+    def _task_key(description: str, project: str | None) -> str:
+        """REC-3: Composite key for task identity."""
+        return f"{description}||{project or ''}"
+
+    def _resolve_person_name(self, name: str, email: str | None = None) -> str:
+        """REC-4: Resolve a person to their canonical name, merging on email."""
+        if email and email in self._email_to_name:
+            return self._email_to_name[email]
+        if email:
+            self._email_to_name[email] = name
+        return name
 
     def upsert_extraction(
         self, source_meta: SourceMetadata, extraction: ExtractionResult
     ):
         """Mirror the UPSERT_CYPHER logic: merge nodes, create relationships."""
         sid = source_meta.source_id
+        received_at = source_meta.received_at.isoformat()
 
         # MERGE Source
         self.sources[sid] = {
             "platform": source_meta.platform.value,
             "sender_name": source_meta.sender_name,
             "sender_email": source_meta.sender_email,
-            "received_at": source_meta.received_at.isoformat(),
+            "received_at": received_at,
         }
 
-        # MERGE People
+        # MERGE People (REC-4: merge on email when available)
         for p in extraction.people:
-            existing = self.persons.get(p.name, {})
-            self.persons[p.name] = {
+            canonical = self._resolve_person_name(p.name, p.email)
+            existing = self.persons.get(canonical, {})
+            aliases = list(set(existing.get("aliases", []) + (p.aliases or [])))
+            # Track short-name as alias if different from canonical
+            if p.name != canonical and p.name not in aliases:
+                aliases.append(p.name)
+            self.persons[canonical] = {
                 "email": p.email or existing.get("email"),
                 "role": p.role or existing.get("role"),
+                "aliases": aliases,
             }
 
         # MERGE Projects
@@ -51,39 +75,47 @@ class InMemoryGraphStore:
 
         # MERGE Tasks + relationships
         for task in extraction.tasks:
-            desc = task.description
-            existing = self.tasks.get(desc, {})
-            self.tasks[desc] = {
+            # REC-3: Composite key
+            tk = self._task_key(task.description, task.project)
+            existing = self.tasks.get(tk, {})
+            self.tasks[tk] = {
+                "description": task.description,
+                "project": task.project,
                 "status": task.status,
                 "due_date": task.due_date,
                 "priority": task.priority,
-                "created_at": existing.get("created_at", source_meta.received_at.isoformat()),
+                "created_at": existing.get("created_at", received_at),
+                "updated_at": received_at,  # REC-2
             }
 
             # Source -[:GENERATED]-> Task
-            self._add_edge("Source", sid, "GENERATED", "Task", desc)
+            self._add_edge("Source", sid, "GENERATED", "Task", tk)
+
+            # REC-1: Source sender -[:REQUESTED_BY]-> Person
+            self._add_edge("Task", tk, "REQUESTED_BY", "Person", source_meta.sender_name)
 
             # Task -[:PART_OF]-> Project
             if task.project:
-                self._add_edge("Task", desc, "PART_OF", "Project", task.project)
+                self._add_edge("Task", tk, "PART_OF", "Project", task.project)
 
             # Person -[:ASSIGNED_TO]-> Task
             if task.assignee:
-                self._add_edge("Person", task.assignee, "ASSIGNED_TO", "Task", desc)
+                self._add_edge("Person", task.assignee, "ASSIGNED_TO", "Task", tk)
 
             # Task -[:WAITING_ON]-> Person
             if task.waiting_on:
-                self._add_edge("Task", desc, "WAITING_ON", "Person", task.waiting_on)
+                self._add_edge("Task", tk, "WAITING_ON", "Person", task.waiting_on)
 
     def mark_task_done(self, description: str):
-        """Mark a task as done (used by simulation to resolve tasks)."""
-        if description in self.tasks:
-            self.tasks[description]["status"] = "done"
-            # Remove WAITING_ON edges for this task
-            self.edges = [
-                e for e in self.edges
-                if not (e[0] == "Task" and e[1] == description and e[2] == "WAITING_ON")
-            ]
+        """Mark a task as done by description (checks all project variants)."""
+        for tk, task in self.tasks.items():
+            if task["description"] == description:
+                task["status"] = "done"
+                # Remove WAITING_ON edges for this task
+                self.edges = [
+                    e for e in self.edges
+                    if not (e[0] == "Task" and e[1] == tk and e[2] == "WAITING_ON")
+                ]
 
     def query_hanging_tasks(self) -> list[dict]:
         """Find tasks waiting on someone (status != done)."""
@@ -94,7 +126,7 @@ class InMemoryGraphStore:
                 task = self.tasks.get(from_key, {})
                 if task.get("status") != "done":
                     results.append({
-                        "task": from_key,
+                        "task": task.get("description", from_key),
                         "waiting_on": to_key,
                         "due_date": task.get("due_date"),
                         "priority": task.get("priority"),
@@ -107,20 +139,19 @@ class InMemoryGraphStore:
         for edge in self.edges:
             from_label, from_key, rel, to_label, to_key = edge
             if from_label == "Task" and rel == "PART_OF" and to_label == "Project":
-                task_desc = from_key
-                task = self.tasks.get(task_desc, {})
+                task = self.tasks.get(from_key, {})
 
                 assignee = None
                 blocked_by = None
                 for e2 in self.edges:
-                    if e2[2] == "ASSIGNED_TO" and e2[3] == "Task" and e2[4] == task_desc:
+                    if e2[2] == "ASSIGNED_TO" and e2[3] == "Task" and e2[4] == from_key:
                         assignee = e2[1]
-                    if e2[0] == "Task" and e2[1] == task_desc and e2[2] == "WAITING_ON":
+                    if e2[0] == "Task" and e2[1] == from_key and e2[2] == "WAITING_ON":
                         blocked_by = e2[4]
 
                 results.append({
                     "project": to_key,
-                    "task": task_desc,
+                    "task": task.get("description", from_key),
                     "status": task.get("status"),
                     "assignee": assignee,
                     "blocked_by": blocked_by,
@@ -129,31 +160,55 @@ class InMemoryGraphStore:
         results.sort(key=lambda r: (r["project"], r["status"] or ""))
         return results
 
-    # --- GAP QUERIES: these are queries the UserAgent will TRY but don't exist
-    # on the real GraphStore. The simulation implements them here to show what's
-    # needed, and the gap report flags them as missing from the production system.
+    # --- NEW QUERIES (formerly gap queries, now in production) ---
 
     def query_tasks_by_assignee(self, person_name: str) -> list[dict]:
-        """GAP: Find all tasks assigned to a specific person."""
+        """REC-5: Find all pending tasks assigned to a specific person."""
         results = []
         for edge in self.edges:
             if edge[0] == "Person" and edge[1] == person_name and edge[2] == "ASSIGNED_TO":
-                task_desc = edge[4]
-                task = self.tasks.get(task_desc, {})
-                results.append({"task": task_desc, **task})
+                task = self.tasks.get(edge[4], {})
+                if task.get("status") != "done":
+                    # Enrich with project and blocker
+                    project = task.get("project")
+                    blocked_by = None
+                    for e2 in self.edges:
+                        if e2[0] == "Task" and e2[1] == edge[4] and e2[2] == "WAITING_ON":
+                            blocked_by = e2[4]
+                    results.append({
+                        "task": task.get("description", edge[4]),
+                        "status": task.get("status"),
+                        "due_date": task.get("due_date"),
+                        "priority": task.get("priority"),
+                        "project": project,
+                        "blocked_by": blocked_by,
+                    })
         return results
 
     def query_tasks_due_between(self, start: str, end: str) -> list[dict]:
-        """GAP: Find tasks due within a date range (ISO strings)."""
+        """REC-6: Find tasks due within a date range (ISO strings)."""
         results = []
-        for desc, task in self.tasks.items():
+        for tk, task in self.tasks.items():
             dd = task.get("due_date")
-            if dd and start <= dd <= end:
-                results.append({"task": desc, **task})
+            if dd and start <= dd <= end and task.get("status") != "done":
+                # Find assignee
+                assignee = None
+                for e in self.edges:
+                    if e[2] == "ASSIGNED_TO" and e[3] == "Task" and e[4] == tk:
+                        assignee = e[1]
+                results.append({
+                    "task": task.get("description", tk),
+                    "status": task.get("status"),
+                    "due_date": dd,
+                    "priority": task.get("priority"),
+                    "assignee": assignee,
+                    "project": task.get("project"),
+                })
+        results.sort(key=lambda r: r["due_date"])
         return results
 
     def query_tasks_from_sender(self, sender_name: str) -> list[dict]:
-        """GAP: Find tasks generated from a specific sender's messages."""
+        """REC-7: Find tasks generated from a specific sender's messages."""
         # Find source IDs from this sender
         source_ids = [
             sid for sid, s in self.sources.items()
@@ -165,11 +220,51 @@ class InMemoryGraphStore:
         for edge in self.edges:
             if (edge[0] == "Source" and edge[1] in source_ids
                     and edge[2] == "GENERATED" and edge[3] == "Task"):
-                task_desc = edge[4]
-                if task_desc not in seen:
-                    seen.add(task_desc)
-                    task = self.tasks.get(task_desc, {})
-                    results.append({"task": task_desc, **task})
+                tk = edge[4]
+                if tk not in seen:
+                    seen.add(tk)
+                    task = self.tasks.get(tk, {})
+                    if task.get("status") != "done":
+                        # Find assignee
+                        assignee = None
+                        for e in self.edges:
+                            if e[2] == "ASSIGNED_TO" and e[3] == "Task" and e[4] == tk:
+                                assignee = e[1]
+                        results.append({
+                            "task": task.get("description", tk),
+                            "status": task.get("status"),
+                            "due_date": task.get("due_date"),
+                            "priority": task.get("priority"),
+                            "assignee": assignee,
+                            "project": task.get("project"),
+                        })
+        return results
+
+    def query_overdue_tasks(self, today: str) -> list[dict]:
+        """REC-8: Find tasks past their due date that aren't done."""
+        results = []
+        for tk, task in self.tasks.items():
+            dd = task.get("due_date")
+            if dd and dd < today and task.get("status") != "done":
+                # Find assignee and blocker
+                assignee = None
+                blocked_by = None
+                project = task.get("project")
+                for e in self.edges:
+                    if e[2] == "ASSIGNED_TO" and e[3] == "Task" and e[4] == tk:
+                        assignee = e[1]
+                    if e[0] == "Task" and e[1] == tk and e[2] == "WAITING_ON":
+                        blocked_by = e[4]
+                results.append({
+                    "task": task.get("description", tk),
+                    "status": task.get("status"),
+                    "due_date": dd,
+                    "priority": task.get("priority"),
+                    "assignee": assignee,
+                    "project": project,
+                    "blocked_by": blocked_by,
+                })
+        results.sort(key=lambda r: r["due_date"])
         return results
 
     def close(self):
