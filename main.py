@@ -151,6 +151,30 @@ def cmd_query(args):
             for reason in r.get("context_reasons", []):
                 print(f"         ^ {reason}")
 
+    elif "unanswered" in question or "thread" in question:
+        print("--- Unanswered Threads ---")
+        results = pipeline.graph.query_unanswered_threads("You")
+        if not results:
+            print("  All threads are responded to!")
+        for r in results:
+            print(f"  - Thread {r['thread_id']}: {r['last_sender']} sent last "
+                  f"({r['message_count']} messages)")
+
+    elif "relationship" in question or "health" in question:
+        today = date.today().isoformat()
+        print("--- Relationship Health ---")
+        results = pipeline.graph.query_relationship_health(today)
+        if not results:
+            print("  No relationship data yet.")
+        for r in results:
+            pct = r["health_pct"]
+            filled = int(pct / 10)
+            bar = "#" * filled + "." * (10 - filled)
+            arrow = {"declining": "v", "stable": "-", "improving": "^"}[r["trend"]]
+            print(f"  {r['person']:25s} {bar} {pct:5.1f}%  {arrow} {r['trend']}")
+            if r["overdue_count"]:
+                print(f"  {'':25s} {r['overdue_count']} overdue, {r['completed']}/{r['total_tasks']} done")
+
     elif "waiting" in question or "blocked" in question or "hanging" in question:
         print("--- Blocked / Hanging Tasks ---")
         results = pipeline.graph.query_hanging_tasks()
@@ -277,6 +301,16 @@ def main():
         help="Minutes to timebox (default: 15)"
     )
 
+    # Fetch Outlook command
+    outlook_parser = subparsers.add_parser("fetch-outlook", help="Fetch emails from Office 365")
+    outlook_parser.add_argument("--since", help="ISO date to fetch from (YYYY-MM-DD)")
+    outlook_parser.add_argument("--max-pages", type=int, default=10)
+
+    # Fetch Slack command
+    slack_parser = subparsers.add_parser("fetch-slack", help="Fetch messages from Slack")
+    slack_parser.add_argument("--channel", help="Specific channel ID")
+    slack_parser.add_argument("--since", help="Unix timestamp")
+
     args = parser.parse_args()
 
     if args.command == "ingest":
@@ -285,6 +319,28 @@ def main():
         cmd_query(args)
     elif args.command == "nudge":
         cmd_nudge(args)
+    elif args.command == "fetch-outlook":
+        pipeline = get_pipeline()
+        from connectors.outlook import OutlookConnector
+        connector = OutlookConnector(
+            pipeline,
+            tenant_id=os.getenv("OUTLOOK_TENANT_ID"),
+            client_id=os.getenv("OUTLOOK_CLIENT_ID"),
+        )
+        connector.authenticate()
+        count = connector.fetch_emails(since=args.since, max_pages=args.max_pages)
+        print(f"Processed {count} emails.")
+        pipeline.graph.close()
+    elif args.command == "fetch-slack":
+        pipeline = get_pipeline()
+        from connectors.slack import SlackConnector
+        connector = SlackConnector(pipeline, bot_token=os.getenv("SLACK_BOT_TOKEN"))
+        if args.channel:
+            count = connector.fetch_channel_history(args.channel, oldest=args.since)
+        else:
+            count = connector.fetch_all_channels(oldest=args.since)
+        print(f"Processed {count} Slack messages.")
+        pipeline.graph.close()
     else:
         parser.print_help()
         sys.exit(1)

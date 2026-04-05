@@ -10,6 +10,7 @@ class Platform(str, Enum):
     GMAIL = "gmail"
     SLACK = "slack"
     TEAMS = "teams"
+    OUTLOOK = "outlook"
 
 
 class SourceMetadata(BaseModel):
@@ -19,6 +20,7 @@ class SourceMetadata(BaseModel):
     sender_name: str = Field(..., description="Display name of the sender")
     sender_email: str = Field(..., description="Email address of the sender")
     received_at: datetime = Field(..., description="When the message was received")
+    thread_id: Optional[str] = Field(None, description="Thread/conversation ID for grouping related messages")
 
 
 # --- Core Ontology Nodes ---

@@ -57,6 +57,20 @@ class InMemoryGraphStore:
         if extraction.tone:
             self.tone_data[sid] = extraction.tone.model_dump() if hasattr(extraction.tone, 'model_dump') else extraction.tone
 
+        # Thread awareness: create RESPONDS_TO edge within conversation
+        thread_id = getattr(source_meta, 'thread_id', None)
+        if thread_id:
+            self.sources[sid]["thread_id"] = thread_id
+            # Find most recent prior source in same thread
+            thread_sources = [
+                (s_id, s) for s_id, s in self.sources.items()
+                if s.get("thread_id") == thread_id and s_id != sid
+            ]
+            if thread_sources:
+                thread_sources.sort(key=lambda x: x[1].get("received_at", ""), reverse=True)
+                prev_sid = thread_sources[0][0]
+                self._add_edge("Source", sid, "RESPONDS_TO", "Source", prev_sid)
+
         # MERGE People (REC-4: merge on email when available)
         for p in extraction.people:
             canonical = self._resolve_person_name(p.name, p.email)
@@ -450,6 +464,65 @@ class InMemoryGraphStore:
                     continue
                 results.append(self._compute_frustration(tk, task, today))
         results.sort(key=lambda r: r["frustration_score"], reverse=True)
+        return results
+
+    def query_unanswered_threads(self, person_name: str) -> list[dict]:
+        """Threads where person participated but hasn't replied to the latest."""
+        # Group sources by thread_id
+        threads: dict[str, list[tuple[str, dict]]] = {}
+        for sid, src in self.sources.items():
+            tid = src.get("thread_id")
+            if tid:
+                threads.setdefault(tid, []).append((sid, src))
+
+        results = []
+        for tid, msgs in threads.items():
+            msgs.sort(key=lambda x: x[1].get("received_at", ""))
+            senders = [m[1]["sender_name"] for m in msgs]
+            if person_name in senders and msgs[-1][1]["sender_name"] != person_name:
+                results.append({
+                    "thread_id": tid,
+                    "last_sender": msgs[-1][1]["sender_name"],
+                    "last_message_at": msgs[-1][1].get("received_at"),
+                    "message_count": len(msgs),
+                })
+        results.sort(key=lambda r: r.get("last_message_at", ""), reverse=True)
+        return results
+
+    def query_relationship_health(self, today: str | None = None) -> list[dict]:
+        """Per-person completion rate and overdue count."""
+        if today is None:
+            today = "2026-12-31"
+
+        # Group tasks by requester (REQUESTED_BY edges)
+        requester_tasks: dict[str, list[str]] = {}
+        for edge in self.edges:
+            if edge[0] == "Task" and edge[2] == "REQUESTED_BY" and edge[3] == "Person":
+                requester_tasks.setdefault(edge[4], []).append(edge[1])
+
+        results = []
+        for person, task_keys in requester_tasks.items():
+            total = len(set(task_keys))
+            completed = 0
+            overdue = 0
+            for tk in set(task_keys):
+                task = self.tasks.get(tk, {})
+                if task.get("status") == "done":
+                    completed += 1
+                elif task.get("due_date") and task["due_date"] < today:
+                    overdue += 1
+
+            health_pct = (completed / total * 100) if total > 0 else 100.0
+            trend = "declining" if overdue > 0 and health_pct < 50 else "stable" if health_pct >= 80 else "improving"
+            results.append({
+                "person": person,
+                "health_pct": round(health_pct, 1),
+                "trend": trend,
+                "overdue_count": overdue,
+                "total_tasks": total,
+                "completed": completed,
+            })
+        results.sort(key=lambda r: r["health_pct"])
         return results
 
     def query_nudge(self, person_name: str, today: str | None = None) -> dict | None:

@@ -15,7 +15,8 @@ MERGE (src:Source {id: $source_id})
 SET src.platform = $platform,
     src.sender_name = $sender_name,
     src.sender_email = $sender_email,
-    src.received_at = $received_at
+    src.received_at = $received_at,
+    src.thread_id = $thread_id
 
 // Create Person nodes — MERGE on email when available (REC-4)
 WITH src
@@ -161,6 +162,51 @@ ORDER BY t.due_date ASC
 """
 
 
+# Thread awareness: create RESPONDS_TO edge within a conversation thread
+RESPONDS_TO_CYPHER = """\
+MATCH (src:Source {id: $source_id})
+WHERE src.thread_id IS NOT NULL
+MATCH (prev:Source)
+WHERE prev.thread_id = src.thread_id AND prev.id <> src.id
+  AND prev.received_at < src.received_at
+WITH src, prev ORDER BY prev.received_at DESC LIMIT 1
+MERGE (src)-[:RESPONDS_TO]->(prev)
+"""
+
+# Unanswered threads: threads where person was mentioned but hasn't replied last
+UNANSWERED_THREADS_CYPHER = """\
+MATCH (src:Source)
+WHERE src.thread_id IS NOT NULL
+WITH src.thread_id AS thread, collect(src) AS msgs
+WITH thread, msgs,
+     [m IN msgs | m.sender_name] AS senders,
+     msgs[size(msgs)-1] AS latest
+WHERE $person_name IN senders AND latest.sender_name <> $person_name
+RETURN thread AS thread_id,
+       latest.sender_name AS last_sender,
+       latest.received_at AS last_message_at,
+       size(msgs) AS message_count
+ORDER BY latest.received_at DESC
+"""
+
+# Relationship health: per-person completion rate and overdue count
+RELATIONSHIP_HEALTH_CYPHER = """\
+MATCH (src:Source)-[:GENERATED]->(t:Task)
+WHERE t.status IS NOT NULL
+WITH src.sender_name AS person,
+     count(t) AS total_tasks,
+     sum(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS completed,
+     sum(CASE WHEN t.due_date IS NOT NULL AND t.due_date < $today
+              AND t.status <> 'done' THEN 1 ELSE 0 END) AS overdue_count
+WHERE total_tasks > 0
+RETURN person,
+       CASE WHEN total_tasks > 0
+            THEN toFloat(completed) / total_tasks * 100
+            ELSE 100.0 END AS health_pct,
+       overdue_count, total_tasks, completed
+ORDER BY health_pct ASC
+"""
+
 # Frustration score: how annoyed is the requester?
 # Combines: days overdue × follow-up count × sender rank
 FRUSTRATION_SCORE_CYPHER = """\
@@ -235,12 +281,16 @@ class GraphStore:
             "sender_name": source_meta.sender_name,
             "sender_email": source_meta.sender_email,
             "received_at": source_meta.received_at.isoformat(),
+            "thread_id": source_meta.thread_id,
             "people": [p.model_dump() for p in extraction.people],
             "projects": [p.model_dump() for p in extraction.projects],
             "tasks": [t.model_dump() for t in extraction.tasks],
         }
         with self.driver.session() as session:
             session.run(UPSERT_CYPHER, **params)
+            # Create thread RESPONDS_TO edge if this message is part of a thread
+            if source_meta.thread_id:
+                session.run(RESPONDS_TO_CYPHER, source_id=source_meta.source_id)
 
     def query_hanging_tasks(self) -> list[dict]:
         """Find all tasks that are waiting on someone."""
@@ -289,3 +339,20 @@ class GraphStore:
         with self.driver.session() as session:
             result = session.run(FORGETTING_CYPHER, person_name=person_name)
             return [dict(record) for record in result]
+
+    def query_unanswered_threads(self, person_name: str) -> list[dict]:
+        """Threads where person participated but hasn't replied to the latest message."""
+        with self.driver.session() as session:
+            result = session.run(UNANSWERED_THREADS_CYPHER, person_name=person_name)
+            return [dict(record) for record in result]
+
+    def query_relationship_health(self, today: str) -> list[dict]:
+        """Per-person completion rate and overdue count."""
+        with self.driver.session() as session:
+            result = session.run(RELATIONSHIP_HEALTH_CYPHER, today=today)
+            records = [dict(r) for r in result]
+        for r in records:
+            hp = r.get("health_pct", 100)
+            od = r.get("overdue_count", 0)
+            r["trend"] = "declining" if od > 0 and hp < 50 else "stable" if hp >= 80 else "improving"
+        return records
