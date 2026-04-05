@@ -49,6 +49,7 @@ class TaskEntity(BaseModel):
     waiting_on: Optional[str] = Field(None, description="Person this task is blocked by")
     priority: str = Field("medium", description="low, medium, high, critical")
     project: Optional[str] = Field(None, description="Project this task belongs to")
+    estimated_minutes: Optional[int] = Field(None, description="Estimated time to complete in minutes")
 
 
 # --- Extraction Result (LLM Output) ---

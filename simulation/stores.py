@@ -267,6 +267,101 @@ class InMemoryGraphStore:
         results.sort(key=lambda r: r["due_date"])
         return results
 
+    def _compute_frustration(self, tk: str, task: dict, today: str) -> dict:
+        """Compute frustration score for a single task."""
+        desc = task.get("description", tk)
+        priority = task.get("priority", "medium")
+        due_date = task.get("due_date")
+        priority_weight = {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(priority, 2)
+
+        # Count mentions (Source -[:GENERATED]-> Task)
+        source_ids = [e[1] for e in self.edges
+                      if e[0] == "Source" and e[2] == "GENERATED"
+                      and e[3] == "Task" and e[4] == tk]
+        mention_count = len(set(source_ids))
+
+        # Get requesters
+        requesters = list({self.sources[sid]["sender_name"]
+                          for sid in source_ids if sid in self.sources})
+
+        # Days overdue
+        days_overdue = 0
+        if due_date and due_date < today:
+            from datetime import date as _date
+            try:
+                dp = due_date.split("-")
+                dd = _date(int(dp[0]), int(dp[1]), int(dp[2]))
+                tp = today.split("-")
+                td = _date(int(tp[0]), int(tp[1]), int(tp[2]))
+                days_overdue = (td - dd).days
+            except (ValueError, IndexError):
+                pass
+
+        # Last mention timestamp
+        last_mention = None
+        for sid in source_ids:
+            if sid in self.sources:
+                rm = self.sources[sid].get("received_at")
+                if rm and (last_mention is None or rm > last_mention):
+                    last_mention = rm
+
+        # Find assignee
+        assignee = None
+        for e in self.edges:
+            if e[2] == "ASSIGNED_TO" and e[3] == "Task" and e[4] == tk:
+                assignee = e[1]
+
+        frustration = (mention_count * 1.5 + days_overdue) * priority_weight
+
+        return {
+            "task": desc,
+            "status": task.get("status"),
+            "due_date": due_date,
+            "priority": priority,
+            "assignee": assignee,
+            "project": task.get("project"),
+            "requesters": requesters,
+            "mention_count": mention_count,
+            "days_overdue": days_overdue,
+            "last_mention": last_mention,
+            "frustration_score": frustration,
+            "estimated_minutes": task.get("estimated_minutes"),
+        }
+
+    def query_frustration_scores(self, today: str | None = None) -> list[dict]:
+        """Stakeholder frustration: how annoyed are your requesters?"""
+        if today is None:
+            today = "2026-12-31"
+        results = []
+        for tk, task in self.tasks.items():
+            if task.get("status") == "done":
+                continue
+            result = self._compute_frustration(tk, task, today)
+            if result["frustration_score"] > 0:
+                results.append(result)
+        results.sort(key=lambda r: r["frustration_score"], reverse=True)
+        return results
+
+    def query_forgetting(self, person_name: str, today: str | None = None) -> list[dict]:
+        """Anti-object-permanence: tasks assigned to you, ranked by frustration."""
+        if today is None:
+            today = "2026-12-31"
+        results = []
+        for edge in self.edges:
+            if edge[0] == "Person" and edge[1] == person_name and edge[2] == "ASSIGNED_TO":
+                tk = edge[4]
+                task = self.tasks.get(tk, {})
+                if task.get("status") == "done":
+                    continue
+                results.append(self._compute_frustration(tk, task, today))
+        results.sort(key=lambda r: r["frustration_score"], reverse=True)
+        return results
+
+    def query_nudge(self, person_name: str, today: str | None = None) -> dict | None:
+        """Timebox nudge: return the single most urgent task to start right now."""
+        results = self.query_forgetting(person_name, today)
+        return results[0] if results else None
+
     def close(self):
         pass
 

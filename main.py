@@ -112,6 +112,34 @@ def cmd_query(args):
                     print(f"  - [{r['priority']}] {r['task']}{due}")
                 break
 
+    elif "frustrat" in question or "annoyed" in question or "stakeholder" in question:
+        print("--- Stakeholder Frustration Scores ---")
+        results = pipeline.graph.query_frustration_scores()
+        if not results:
+            print("  No frustrated stakeholders.")
+        for r in results:
+            score = r.get("frustration_score", 0)
+            bar = "!" * min(int(score / 3), 20)
+            req = ", ".join(r.get("requesters", []) if isinstance(r.get("requesters"), list) else [str(r.get("requester", "?"))])
+            overdue = f" ({r['days_overdue']}d overdue)" if r.get("days_overdue") else ""
+            mentions = f" asked {r['mention_count']}x" if r.get("mention_count", 0) > 1 else ""
+            print(f"  [{score:5.1f}] {bar} {r['task']}")
+            print(f"         from {req}{mentions}{overdue}")
+
+    elif "forgetting" in question or "forget" in question:
+        print("--- What You're Forgetting ---")
+        results = pipeline.graph.query_forgetting("You")
+        if not results:
+            print("  Nothing forgotten! (suspicious...)")
+        for r in results:
+            score = r.get("frustration_score", 0)
+            level = "!!" if score > 20 else "!" if score > 5 else "."
+            req = ", ".join(r.get("requesters", [])) if r.get("requesters") else "unknown"
+            overdue = f" ({r['days_overdue']}d overdue)" if r.get("days_overdue") else ""
+            due = f" due {r['due_date']}" if r.get("due_date") else ""
+            print(f"  {level} [{score:5.1f}] {r['task']}")
+            print(f"         from {req}{due}{overdue}")
+
     elif "waiting" in question or "blocked" in question or "hanging" in question:
         print("--- Blocked / Hanging Tasks ---")
         results = pipeline.graph.query_hanging_tasks()
@@ -157,6 +185,48 @@ def cmd_query(args):
     pipeline.graph.close()
 
 
+def cmd_nudge(args):
+    """Timebox nudge: pick the one most important task and make it approachable."""
+    pipeline = get_pipeline()
+    timebox = args.timebox or 15
+
+    result = pipeline.graph.query_forgetting("You")
+    if not result:
+        print("Nothing to do! (or everything is done)")
+        pipeline.graph.close()
+        return
+
+    task = result[0]
+    score = task.get("frustration_score", 0)
+    req = ", ".join(task.get("requesters", [])) if task.get("requesters") else "someone"
+    est = task.get("estimated_minutes") or "~20"
+    overdue_info = ""
+    if task.get("days_overdue"):
+        overdue_info = f"  It's {task['days_overdue']} days overdue."
+    mention_info = ""
+    if task.get("mention_count", 0) > 1:
+        mention_info = f" They've asked {task['mention_count']} times."
+
+    print()
+    print(f"  Hey. One thing. That's all.")
+    print()
+    print(f"  -> \"{task['task']}\"")
+    print(f"     {req} asked for this.{mention_info}")
+    if task.get("due_date"):
+        print(f"     Due: {task['due_date']}.{overdue_info}")
+    print(f"     Estimated: {est} min. But just do {timebox} min.")
+    print()
+    if timebox >= 15:
+        print(f"     If you finish in 5  -> you earned a {timebox - 5} min break.")
+    print(f"     If you finish in {timebox} -> move to the next thing.")
+    print(f"     If {timebox} min passes  -> stop. You made progress. That counts.")
+    print()
+    print(f"     Frustration score: {score:.0f}  (higher = more people waiting)")
+    print()
+
+    pipeline.graph.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Brain Dump — Second Brain Ingestion Engine"
@@ -173,12 +243,21 @@ def main():
         "--question", "-q", required=True, help="Natural language question"
     )
 
+    # Nudge command
+    nudge_parser = subparsers.add_parser("nudge", help="Timebox: one task, right now")
+    nudge_parser.add_argument(
+        "--timebox", "-t", type=int, default=15,
+        help="Minutes to timebox (default: 15)"
+    )
+
     args = parser.parse_args()
 
     if args.command == "ingest":
         cmd_ingest(args)
     elif args.command == "query":
         cmd_query(args)
+    elif args.command == "nudge":
+        cmd_nudge(args)
     else:
         parser.print_help()
         sys.exit(1)

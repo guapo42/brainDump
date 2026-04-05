@@ -202,6 +202,19 @@ class ADHDUserAgent:
 
             task_pool = self._scan_queries(tick, visible_topics, week, tick_log, week_log)
 
+            # Monday nudge: anti-object-permanence — query what you're forgetting
+            if tick == 0:
+                forgetting = self.graph.query_forgetting("You", week.monday.isoformat())
+                tick_log.tool_actions.append(f"query:forgetting({len(forgetting)} results)")
+                self.total_queries_executed += 1
+                week_log.queries_executed += 1
+                # Inject high-frustration tasks into the pool
+                seen_descs = {t.get("task") for t in task_pool}
+                for f in forgetting[:3]:  # top 3 most frustrating
+                    if f.get("task") and f["task"] not in seen_descs:
+                        seen_descs.add(f["task"])
+                        task_pool.append(f)
+
             if not task_pool:
                 self.state.phase = AgentPhase.IDLE
                 self.state.decay_dopamine()

@@ -161,6 +161,61 @@ ORDER BY t.due_date ASC
 """
 
 
+# Frustration score: how annoyed is the requester?
+# Combines: days overdue × follow-up count × sender rank
+FRUSTRATION_SCORE_CYPHER = """\
+MATCH (src:Source)-[:GENERATED]->(t:Task)
+WHERE t.status <> 'done'
+OPTIONAL MATCH (assignee:Person)-[:ASSIGNED_TO]->(t)
+WITH t, assignee,
+     count(DISTINCT src) AS mention_count,
+     max(src.received_at) AS last_mention,
+     collect(DISTINCT src.sender_name)[0] AS requester
+WITH t, assignee, mention_count, last_mention, requester,
+     CASE
+       WHEN t.due_date IS NOT NULL AND t.due_date < date().toString()
+       THEN duration.between(date(t.due_date), date()).days
+       ELSE 0
+     END AS days_overdue
+RETURN t.description AS task, t.status AS status, t.due_date AS due_date,
+       t.priority AS priority, assignee.name AS assignee, requester,
+       mention_count, days_overdue, last_mention,
+       (mention_count * 1.5 + days_overdue) *
+         CASE t.priority
+           WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+           WHEN 'medium' THEN 2 ELSE 1
+         END AS frustration_score
+ORDER BY frustration_score DESC
+"""
+
+# "What are you forgetting?" — anti-object-permanence query
+FORGETTING_CYPHER = """\
+MATCH (p:Person)-[:ASSIGNED_TO]->(t:Task)
+WHERE p.name = $person_name AND t.status <> 'done'
+OPTIONAL MATCH (src:Source)-[:GENERATED]->(t)
+WITH t, count(DISTINCT src) AS mention_count,
+     max(src.received_at) AS last_mention,
+     collect(DISTINCT src.sender_name) AS requesters
+OPTIONAL MATCH (t)-[:PART_OF]->(proj:Project)
+WITH t, mention_count, last_mention, requesters, proj,
+     CASE
+       WHEN t.due_date IS NOT NULL AND t.due_date < date().toString()
+       THEN duration.between(date(t.due_date), date()).days
+       ELSE 0
+     END AS days_overdue
+RETURN t.description AS task, t.due_date AS due_date,
+       t.priority AS priority, proj.name AS project,
+       requesters, mention_count, days_overdue, last_mention,
+       (mention_count * 1.5 + days_overdue) *
+         CASE t.priority
+           WHEN 'critical' THEN 4 WHEN 'high' THEN 3
+           WHEN 'medium' THEN 2 ELSE 1
+         END AS frustration_score,
+       t.estimated_minutes AS estimated_minutes
+ORDER BY frustration_score DESC
+"""
+
+
 class GraphStore:
     """Interface to Neo4j for upserting and querying the knowledge graph."""
 
@@ -221,4 +276,16 @@ class GraphStore:
         """Find tasks past their due date that aren't done (REC-8)."""
         with self.driver.session() as session:
             result = session.run(OVERDUE_TASKS_CYPHER, today=today)
+            return [dict(record) for record in result]
+
+    def query_frustration_scores(self) -> list[dict]:
+        """Stakeholder frustration: how annoyed are your requesters?"""
+        with self.driver.session() as session:
+            result = session.run(FRUSTRATION_SCORE_CYPHER)
+            return [dict(record) for record in result]
+
+    def query_forgetting(self, person_name: str) -> list[dict]:
+        """Anti-object-permanence: what are you forgetting?"""
+        with self.driver.session() as session:
+            result = session.run(FORGETTING_CYPHER, person_name=person_name)
             return [dict(record) for record in result]
