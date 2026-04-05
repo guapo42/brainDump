@@ -3,6 +3,7 @@ from .schemas import (
     PersonEntity,
     ProjectEntity,
     TaskEntity,
+    MessageTone,
     ExtractionResult,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "PersonEntity",
     "ProjectEntity",
     "TaskEntity",
+    "MessageTone",
     "ExtractionResult",
 ]

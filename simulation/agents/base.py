@@ -8,6 +8,7 @@ from datetime import datetime
 
 from models.schemas import (
     ExtractionResult,
+    MessageTone,
     PersonEntity,
     Platform,
     ProjectEntity,
@@ -125,12 +126,31 @@ class BaseAgent(ABC):
         )
 
     @staticmethod
+    def _tone(
+        urgency: float = 0.0,
+        escalation: bool = False,
+        temperature: str = "neutral",
+        follow_up: bool = False,
+        deliverable: bool = False,
+        peer_progress: bool = False,
+    ) -> MessageTone:
+        return MessageTone(
+            urgency_language=urgency,
+            escalation_signals=escalation,
+            emotional_temperature=temperature,
+            is_follow_up=follow_up,
+            references_deliverable=deliverable,
+            peer_progress_mentioned=peer_progress,
+        )
+
+    @staticmethod
     def _extraction(
         people: list[PersonEntity] | None = None,
         projects: list[ProjectEntity] | None = None,
         tasks: list[TaskEntity] | None = None,
         summary: str = "",
         urls: list[str] | None = None,
+        tone: MessageTone | None = None,
     ) -> ExtractionResult:
         return ExtractionResult(
             people=people or [],
@@ -138,4 +158,5 @@ class BaseAgent(ABC):
             tasks=tasks or [],
             summary=summary,
             urls=urls or [],
+            tone=tone,
         )

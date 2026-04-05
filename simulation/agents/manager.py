@@ -63,6 +63,7 @@ class LindaTorresAgent(BaseAgent):
                                    due_date="2026-03-06", priority="high"),
                     ],
                     summary="Mandatory security training due March 6th, compliance requirement.",
+                    tone=self._tone(urgency=0.7, escalation=True, temperature="neutral"),
                 ),
             ))
 
@@ -105,6 +106,8 @@ class LindaTorresAgent(BaseAgent):
                                    due_date="2026-05-01", priority="critical"),
                     ],
                     summary="Escalation: security training overdue, must complete by May 1.",
+                    tone=self._tone(urgency=1.0, escalation=True, temperature="frustrated",
+                                    follow_up=True),
                 ),
             ))
 

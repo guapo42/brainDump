@@ -23,6 +23,7 @@ class InMemoryGraphStore:
         self.projects: dict[str, dict] = {}
         self.tasks: dict[str, dict] = {}             # key = "desc||project" or "desc||"
         self.edges: list[tuple[str, str, str, str, str]] = []
+        self.tone_data: dict[str, dict] = {}         # source_id -> tone dict
 
     @staticmethod
     def _task_key(description: str, project: str | None) -> str:
@@ -51,6 +52,10 @@ class InMemoryGraphStore:
             "sender_email": source_meta.sender_email,
             "received_at": received_at,
         }
+
+        # Store tone data if present
+        if extraction.tone:
+            self.tone_data[sid] = extraction.tone.model_dump() if hasattr(extraction.tone, 'model_dump') else extraction.tone
 
         # MERGE People (REC-4: merge on email when available)
         for p in extraction.people:
@@ -268,7 +273,19 @@ class InMemoryGraphStore:
         return results
 
     def _compute_frustration(self, tk: str, task: dict, today: str) -> dict:
-        """Compute frustration score for a single task."""
+        """Compute frustration score with tone analysis and contextual signals.
+
+        Score = (mentions × 1.5 + days_overdue + tone_boost + context_boost) × priority_weight
+
+        Tone boosts:
+          - escalation_signals: +5 (VP/HR/client mentioned)
+          - is_follow_up: +3 per follow-up (they asked AGAIN)
+          - frustrated/panicked tone: +2
+          - urgency_language: up to +3 (scaled by 0-1 value)
+        Context boosts:
+          - references_deliverable: +4 (this feeds into a milestone)
+          - peer_progress_mentioned: +3 (your teammates are doing their part)
+        """
         desc = task.get("description", tk)
         priority = task.get("priority", "medium")
         due_date = task.get("due_date")
@@ -278,11 +295,12 @@ class InMemoryGraphStore:
         source_ids = [e[1] for e in self.edges
                       if e[0] == "Source" and e[2] == "GENERATED"
                       and e[3] == "Task" and e[4] == tk]
-        mention_count = len(set(source_ids))
+        unique_sources = list(set(source_ids))
+        mention_count = len(unique_sources)
 
         # Get requesters
         requesters = list({self.sources[sid]["sender_name"]
-                          for sid in source_ids if sid in self.sources})
+                          for sid in unique_sources if sid in self.sources})
 
         # Days overdue
         days_overdue = 0
@@ -299,7 +317,7 @@ class InMemoryGraphStore:
 
         # Last mention timestamp
         last_mention = None
-        for sid in source_ids:
+        for sid in unique_sources:
             if sid in self.sources:
                 rm = self.sources[sid].get("received_at")
                 if rm and (last_mention is None or rm > last_mention):
@@ -311,7 +329,75 @@ class InMemoryGraphStore:
             if e[2] == "ASSIGNED_TO" and e[3] == "Task" and e[4] == tk:
                 assignee = e[1]
 
-        frustration = (mention_count * 1.5 + days_overdue) * priority_weight
+        # --- Tone analysis across all source messages ---
+        tone_boost = 0.0
+        context_boost = 0.0
+        follow_up_count = 0
+        has_escalation = False
+        max_urgency_language = 0.0
+        worst_temperature = "neutral"
+        has_deliverable_ref = False
+        has_peer_progress = False
+        context_reasons: list[str] = []
+
+        for sid in unique_sources:
+            tone = self.tone_data.get(sid, {})
+            if not tone:
+                continue
+
+            if tone.get("escalation_signals"):
+                has_escalation = True
+            if tone.get("is_follow_up"):
+                follow_up_count += 1
+            if tone.get("urgency_language", 0) > max_urgency_language:
+                max_urgency_language = tone["urgency_language"]
+            temp = tone.get("emotional_temperature", "neutral")
+            if temp in ("frustrated", "panicked", "passive_aggressive"):
+                worst_temperature = temp
+            if tone.get("references_deliverable"):
+                has_deliverable_ref = True
+            if tone.get("peer_progress_mentioned"):
+                has_peer_progress = True
+
+        # Apply tone boosts
+        if has_escalation:
+            tone_boost += 5
+            context_reasons.append("escalated to leadership/compliance")
+        if follow_up_count > 0:
+            tone_boost += follow_up_count * 3
+            context_reasons.append(f"asked {mention_count}x ({follow_up_count} follow-ups)")
+        if worst_temperature in ("frustrated", "panicked"):
+            tone_boost += 2
+            context_reasons.append(f"sender sounds {worst_temperature}")
+        elif worst_temperature == "passive_aggressive":
+            tone_boost += 1.5
+            context_reasons.append("sender tone is strained")
+        tone_boost += max_urgency_language * 3  # 0-3 scale
+
+        # Apply context boosts
+        if has_deliverable_ref:
+            context_boost += 4
+            context_reasons.append("feeds into upcoming deliverable/milestone")
+        if has_peer_progress:
+            context_boost += 3
+            context_reasons.append("teammates are reporting progress — you should too")
+
+        # Check for related project activity (peer progress from graph)
+        project = task.get("project")
+        if project and not has_peer_progress:
+            # Look for other people completing tasks on the same project
+            for e in self.edges:
+                if e[0] == "Task" and e[2] == "PART_OF" and e[4] == project:
+                    other_tk = e[1]
+                    if other_tk == tk:
+                        continue
+                    other_task = self.tasks.get(other_tk, {})
+                    if other_task.get("status") == "done":
+                        context_boost += 1.5
+                        context_reasons.append(f"others completed work on {project}")
+                        break
+
+        frustration = (mention_count * 1.5 + days_overdue + tone_boost + context_boost) * priority_weight
 
         return {
             "task": desc,
@@ -319,13 +405,22 @@ class InMemoryGraphStore:
             "due_date": due_date,
             "priority": priority,
             "assignee": assignee,
-            "project": task.get("project"),
+            "project": project,
             "requesters": requesters,
             "mention_count": mention_count,
+            "follow_up_count": follow_up_count,
             "days_overdue": days_overdue,
             "last_mention": last_mention,
             "frustration_score": frustration,
             "estimated_minutes": task.get("estimated_minutes"),
+            "tone_summary": {
+                "max_urgency": round(max_urgency_language, 2),
+                "has_escalation": has_escalation,
+                "worst_temperature": worst_temperature,
+                "has_deliverable_ref": has_deliverable_ref,
+                "has_peer_progress": has_peer_progress,
+            },
+            "context_reasons": context_reasons,
         }
 
     def query_frustration_scores(self, today: str | None = None) -> list[dict]:

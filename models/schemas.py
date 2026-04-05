@@ -52,6 +52,36 @@ class TaskEntity(BaseModel):
     estimated_minutes: Optional[int] = Field(None, description="Estimated time to complete in minutes")
 
 
+# --- Message Tone Analysis ---
+
+class MessageTone(BaseModel):
+    """Tone and urgency signals extracted from communication style."""
+    urgency_language: float = Field(
+        0.0, ge=0.0, le=1.0,
+        description="0.0='when you get a chance' to 1.0='URGENT/ACTION REQUIRED'",
+    )
+    escalation_signals: bool = Field(
+        False,
+        description="Mentions VP, HR, client, compliance, or consequence of inaction",
+    )
+    emotional_temperature: str = Field(
+        "neutral",
+        description="neutral, warm, frustrated, panicked, passive_aggressive",
+    )
+    is_follow_up: bool = Field(
+        False,
+        description="References a previous unanswered request on the same topic",
+    )
+    references_deliverable: bool = Field(
+        False,
+        description="Links this task to an upcoming milestone, deadline, or client deliverable",
+    )
+    peer_progress_mentioned: bool = Field(
+        False,
+        description="Other team members are reporting progress on the same project",
+    )
+
+
 # --- Extraction Result (LLM Output) ---
 
 class ExtractionResult(BaseModel):
@@ -62,3 +92,4 @@ class ExtractionResult(BaseModel):
     tasks: List[TaskEntity] = Field(default_factory=list, description="Action items and deliverables")
     urls: List[str] = Field(default_factory=list, description="URLs or links found")
     summary: str = Field(..., description="Short summary for ChromaDB embedding")
+    tone: Optional[MessageTone] = Field(None, description="Tone and urgency analysis of the message")

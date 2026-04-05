@@ -122,9 +122,19 @@ def cmd_query(args):
             bar = "!" * min(int(score / 3), 20)
             req = ", ".join(r.get("requesters", []) if isinstance(r.get("requesters"), list) else [str(r.get("requester", "?"))])
             overdue = f" ({r['days_overdue']}d overdue)" if r.get("days_overdue") else ""
+            fups = r.get("follow_up_count", 0)
             mentions = f" asked {r['mention_count']}x" if r.get("mention_count", 0) > 1 else ""
+            if fups:
+                mentions += f" ({fups} follow-ups)"
             print(f"  [{score:5.1f}] {bar} {r['task']}")
             print(f"         from {req}{mentions}{overdue}")
+            # Show tone context
+            tone = r.get("tone_summary", {})
+            reasons = r.get("context_reasons", [])
+            if tone.get("worst_temperature") not in ("neutral", None):
+                print(f"         tone: {tone['worst_temperature']}")
+            for reason in reasons:
+                print(f"         ^ {reason}")
 
     elif "forgetting" in question or "forget" in question:
         print("--- What You're Forgetting ---")
@@ -137,8 +147,12 @@ def cmd_query(args):
             req = ", ".join(r.get("requesters", [])) if r.get("requesters") else "unknown"
             overdue = f" ({r['days_overdue']}d overdue)" if r.get("days_overdue") else ""
             due = f" due {r['due_date']}" if r.get("due_date") else ""
+            fups = r.get("follow_up_count", 0)
+            fup_str = f" ({fups} follow-ups)" if fups else ""
             print(f"  {level} [{score:5.1f}] {r['task']}")
-            print(f"         from {req}{due}{overdue}")
+            print(f"         from {req}{fup_str}{due}{overdue}")
+            for reason in r.get("context_reasons", []):
+                print(f"         ^ {reason}")
 
     elif "waiting" in question or "blocked" in question or "hanging" in question:
         print("--- Blocked / Hanging Tasks ---")
@@ -203,9 +217,13 @@ def cmd_nudge(args):
     overdue_info = ""
     if task.get("days_overdue"):
         overdue_info = f"  It's {task['days_overdue']} days overdue."
+    fups = task.get("follow_up_count", 0)
     mention_info = ""
     if task.get("mention_count", 0) > 1:
-        mention_info = f" They've asked {task['mention_count']} times."
+        mention_info = f" They've asked {task['mention_count']} times"
+        if fups:
+            mention_info += f" ({fups} follow-ups)"
+        mention_info += "."
 
     print()
     print(f"  Hey. One thing. That's all.")
@@ -216,6 +234,18 @@ def cmd_nudge(args):
         print(f"     Due: {task['due_date']}.{overdue_info}")
     print(f"     Estimated: {est} min. But just do {timebox} min.")
     print()
+
+    # Context reasons — WHY this matters right now
+    reasons = task.get("context_reasons", [])
+    tone = task.get("tone_summary", {})
+    if reasons or tone.get("worst_temperature") not in ("neutral", None):
+        print(f"     Why this matters:")
+        if tone.get("worst_temperature") not in ("neutral", None):
+            print(f"       - sender sounds {tone['worst_temperature']}")
+        for reason in reasons:
+            print(f"       - {reason}")
+        print()
+
     if timebox >= 15:
         print(f"     If you finish in 5  -> you earned a {timebox - 5} min break.")
     print(f"     If you finish in {timebox} -> move to the next thing.")

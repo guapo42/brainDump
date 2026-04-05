@@ -56,6 +56,7 @@ class SarahChenAgent(BaseAgent):
                                    due_date="2026-02-13", priority="high", project=PHOENIX,),
                     ],
                     summary="Sarah shares Phoenix migration plan, needs API contract by Feb 13.",
+                    tone=self._tone(urgency=0.5, deliverable=True, peer_progress=True),
                 ),
             ))
 
@@ -146,6 +147,7 @@ class SarahChenAgent(BaseAgent):
                                    assignee="You", priority="high", project=PHOENIX),
                     ],
                     summary="Phoenix load test: batch endpoint degrades at 500 users. Pooling fix needed.",
+                    tone=self._tone(urgency=0.6, deliverable=True, peer_progress=True),
                 ),
             ))
 
@@ -206,6 +208,7 @@ class SarahChenAgent(BaseAgent):
                                    project=PHOENIX),
                     ],
                     summary="Sarah needs sanitized prod data for Phoenix UAT seeding by Jul 3.",
+                    tone=self._tone(urgency=0.7, deliverable=True, peer_progress=True),
                 ),
             ))
 

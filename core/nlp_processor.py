@@ -17,7 +17,17 @@ Rules:
 - For each task, identify who is assigned (assignee) and who it is waiting on (waiting_on).
 - Extract deadlines as ISO date strings (YYYY-MM-DD) when mentioned.
 - Infer priority from urgency cues (e.g. "URGENT", "critical", "high priority").
+- Estimate time needed for each task in minutes when possible.
 - Write a 1-2 sentence summary of the overall communication.
+
+Tone Analysis — read HOW the sender is communicating:
+- urgency_language: 0.0 for "when you get a chance", 1.0 for "URGENT/ACTION REQUIRED"
+- escalation_signals: true if the message mentions VP, HR, client, compliance, or consequences
+- emotional_temperature: "neutral", "warm", "frustrated", "panicked", or "passive_aggressive"
+- is_follow_up: true if this references a previous unanswered request
+- references_deliverable: true if this task connects to a milestone, client deadline, or go-live
+- peer_progress_mentioned: true if other team members are described as having completed work \
+  or making progress on the same project (social proof that you should also be contributing)
 
 Communication:
 {text}

@@ -110,6 +110,8 @@ class RobertKimAgent(BaseAgent):
                                    waiting_on="You"),
                     ],
                     summary="URGENT: Phoenix milestone 1 due Friday. Go/no-go needed Wednesday.",
+                    tone=self._tone(urgency=1.0, temperature="panicked",
+                                    deliverable=True, peer_progress=True),
                 ),
             ))
 
@@ -130,6 +132,7 @@ class RobertKimAgent(BaseAgent):
                                    due_date="2026-04-24", priority="medium", project=PHOENIX),
                     ],
                     summary="Phoenix M1 retro. Code review delays flagged, lessons learned due Apr 24.",
+                    tone=self._tone(urgency=0.3, temperature="frustrated", follow_up=True),
                 ),
                 resolves_tasks=["Submit Phoenix milestone 1 go/no-go assessment"],
             ))
@@ -185,6 +188,8 @@ class RobertKimAgent(BaseAgent):
                                    due_date="2026-06-15", priority="critical", project=PHOENIX),
                     ],
                     summary="Phoenix M2 crunch. Status report needed. Warns about EPA competing priority.",
+                    tone=self._tone(urgency=0.9, escalation=True, temperature="frustrated",
+                                    deliverable=True),
                 ),
             ))
 
@@ -233,6 +238,8 @@ class RobertKimAgent(BaseAgent):
                                    due_date="2026-09-02", priority="critical", project=PHOENIX),
                     ],
                     summary="Phoenix go-live Sep 4. Final checklist and readiness confirmation needed.",
+                    tone=self._tone(urgency=1.0, escalation=True, temperature="panicked",
+                                    deliverable=True),
                 ),
             ))
 
@@ -392,6 +399,8 @@ class RobertKimAgent(BaseAgent):
                                    waiting_on="You"),
                     ],
                     summary="EPA staging Jul 31, production Aug 7. Hard government deadline.",
+                    tone=self._tone(urgency=1.0, escalation=True, temperature="neutral",
+                                    deliverable=True, peer_progress=True),
                 ),
             ))
 
