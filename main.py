@@ -12,15 +12,12 @@ load_dotenv()
 
 def get_pipeline():
     """Initialize the full pipeline with configured services."""
-    from core.nlp_processor import Extractor
+    from core.nlp_processor import create_extractor_from_env
     from core.graph_engine import GraphStore
     from core.vector_engine import VectorStore
     from core.orchestrator import Pipeline
 
-    extractor = Extractor(
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-        model=os.getenv("LLM_MODEL", "qwen2.5-coder:30b"),
-    )
+    extractor = create_extractor_from_env()
     graph = GraphStore(
         uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
         user=os.getenv("NEO4J_USER", "neo4j"),
