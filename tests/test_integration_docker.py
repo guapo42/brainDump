@@ -2,6 +2,7 @@
 
 Run with: pytest -m integration
 Skip by default in normal test runs.
+Automatically skips if Neo4j/ChromaDB are not reachable.
 """
 
 import pytest
@@ -17,8 +18,37 @@ from models.schemas import (
     TaskEntity,
 )
 
+
+def _neo4j_available() -> bool:
+    try:
+        from neo4j import GraphDatabase
+        driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password_here"))
+        driver.verify_connectivity()
+        driver.close()
+        return True
+    except Exception:
+        return False
+
+
+def _chroma_available() -> bool:
+    try:
+        import chromadb
+        client = chromadb.HttpClient(host="localhost", port=8000)
+        client.heartbeat()
+        return True
+    except Exception:
+        return False
+
+
 # Mark all tests in this module as integration tests
-pytestmark = pytest.mark.integration
+# Skip entire module if containers aren't running
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _neo4j_available() or not _chroma_available(),
+        reason="Docker containers not running (neo4j:7687 / chroma:8000)",
+    ),
+]
 
 
 # --- Fixtures ---

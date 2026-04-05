@@ -254,10 +254,11 @@ class ADHDUserAgent:
             best_icnu, best_task = scored[0]
 
             # --- Wall of Awful check ---
-            # Triggers based on interest+challenge (intrinsic motivation),
-            # NOT urgency. A task can be urgent and still dreaded.
+            # Triggers based on interest+challenge (intrinsic motivation).
+            # But extreme urgency (from frustration scores) can override —
+            # this models the "I literally cannot put this off any longer" panic.
             wall_trigger = check_wall_of_awful(
-                best_icnu.interest, best_icnu.challenge,
+                best_icnu.interest, best_icnu.challenge, best_icnu.urgency,
                 self.state.dopamine_level, self.state,
             )
             if wall_trigger:
@@ -377,14 +378,14 @@ class ADHDUserAgent:
         task_pool: list[dict] = []
         seen_descs: set[str] = set()
 
+        today = week.monday.isoformat()
+        week_end = (week.monday + timedelta(days=6)).isoformat()
         query_methods = [
-            ("tasks_by_assignee", lambda: self.graph.query_tasks_by_assignee("You")),
+            # Primary: forgetting query returns tasks with frustration scores
+            ("forgetting", lambda: self.graph.query_forgetting("You", today)),
             ("hanging_tasks", lambda: self.graph.query_hanging_tasks()),
-            ("overdue_tasks", lambda: self.graph.query_overdue_tasks(week.monday.isoformat())),
-            ("tasks_due_between", lambda: self.graph.query_tasks_due_between(
-                week.monday.isoformat(),
-                (week.monday + timedelta(days=6)).isoformat(),
-            )),
+            ("overdue_tasks", lambda: self.graph.query_overdue_tasks(today)),
+            ("tasks_due_between", lambda: self.graph.query_tasks_due_between(today, week_end)),
             ("project_overview", lambda: self.graph.query_project_overview()),
         ]
 

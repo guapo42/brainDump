@@ -23,7 +23,12 @@ def score_task(
     week: SimWeek,
     seen_types: set[str],
 ) -> ICNUScore:
-    """Score a task using the ICNU framework instead of standard priority."""
+    """Score a task using the ICNU framework instead of standard priority.
+
+    Frustration score (if present on the task dict) boosts urgency.
+    This is how "someone asked 3 times and sounds frustrated" translates
+    into the one ICNU dimension that can break through executive dysfunction.
+    """
     desc = task.get("task", task.get("description", "")).lower()
     project = task.get("project") or ""
     due_date = task.get("due_date")
@@ -33,6 +38,24 @@ def score_task(
     challenge = _score_challenge(words)
     novelty = _score_novelty(desc, seen_types)
     urgency = _score_urgency(due_date, week)
+
+    # Frustration boost: convert stakeholder frustration into urgency
+    frustration = task.get("frustration_score", 0)
+    if frustration > 0:
+        # Normalize frustration (typically 0-60) to a 0-0.5 boost
+        frustration_boost = min(frustration / 40, 0.5)
+        urgency = min(1.0, urgency + frustration_boost)
+
+        # Context reasons provide additional urgency signals
+        reasons = task.get("context_reasons", [])
+        for reason in reasons:
+            if "escalat" in reason:
+                urgency = min(1.0, urgency + 0.15)
+            if "teammate" in reason or "progress" in reason:
+                # Social proof: peers are doing their part
+                interest = min(1.0, interest + 0.1)
+            if "follow-up" in reason:
+                urgency = min(1.0, urgency + 0.1)
 
     return ICNUScore(
         interest=round(interest, 2),

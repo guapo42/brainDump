@@ -9,15 +9,22 @@ from simulation.cognitive.state import AgentPhase, CognitiveState
 
 
 def check_wall_of_awful(
-    interest: float, challenge: float, dopamine: float, state: CognitiveState,
+    interest: float, challenge: float, urgency: float,
+    dopamine: float, state: CognitiveState,
 ) -> bool:
     """Wall of Awful: can't start tasks with no intrinsic motivation.
 
-    The key ADHD insight: a task can be urgent AND dreaded. Urgency alone
-    doesn't overcome the wall — you need interest or challenge to engage.
-    Low dopamine makes it worse.
+    The key ADHD insight: a task can be urgent AND dreaded. But high enough
+    external pressure (urgency >= 0.9, from frustration/deadline panic) can
+    break through. This models the "I literally cannot put this off any longer"
+    moment. The frustration score feeds into urgency via ICNU scoring.
+
     Returns True if the Wall was triggered.
     """
+    # Panic override: extreme urgency (frustration-boosted) breaks through
+    if urgency >= 0.9:
+        return False
+
     engagement = interest + challenge  # intrinsic motivation
     if engagement <= 0.2 and dopamine < 0.5:
         state.distraction_ticks_remaining = 3
