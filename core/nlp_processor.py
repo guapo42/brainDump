@@ -39,9 +39,16 @@ SYSTEM_PROMPT = "You extract structured project management data from communicati
 
 
 def _create_ollama_client(base_url: str, api_key: str, model: str):
-    """Create instructor-patched client for local Ollama."""
+    """Create instructor-patched client for local Ollama.
+
+    Uses JSON mode rather than tool-calling: tool-call support varies
+    widely across Ollama models (gemma3 has none; qwen2.5-coder<30b emits
+    JSON as content; qwen3-coder stringifies nested arguments). JSON mode
+    works uniformly with any model that can follow a "respond in JSON"
+    instruction.
+    """
     raw = OpenAI(base_url=base_url, api_key=api_key)
-    return instructor.from_openai(raw), model
+    return instructor.from_openai(raw, mode=instructor.Mode.JSON), model
 
 
 def _create_azure_client(endpoint: str, api_key: str, api_version: str, deployment: str):

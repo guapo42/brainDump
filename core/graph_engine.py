@@ -73,28 +73,33 @@ SET t.status = task_data.status,
 MERGE (src)-[:GENERATED]->(t)
 
 // Source sender -[:REQUESTED_BY]-> Person (REC-1)
-WITH src, t
-MATCH (requester:Person)
+WITH src, t, task_data
+OPTIONAL MATCH (requester:Person)
 WHERE requester.name = src.sender_name OR requester.email = src.sender_email
-MERGE (t)-[:REQUESTED_BY]->(requester)
+FOREACH (_ IN CASE WHEN requester IS NULL THEN [] ELSE [1] END |
+    MERGE (t)-[:REQUESTED_BY]->(requester)
+)
 
 // Task -[:PART_OF]-> Project
 WITH t, task_data
-WHERE task_data.project IS NOT NULL
-MERGE (proj:Project {name: task_data.project})
-MERGE (t)-[:PART_OF]->(proj)
+FOREACH (_ IN CASE WHEN task_data.project IS NULL THEN [] ELSE [1] END |
+    MERGE (proj:Project {name: task_data.project})
+    MERGE (t)-[:PART_OF]->(proj)
+)
 
 // Person -[:ASSIGNED_TO]-> Task
 WITH t, task_data
-WHERE task_data.assignee IS NOT NULL
-MERGE (p:Person {name: task_data.assignee})
-MERGE (p)-[:ASSIGNED_TO]->(t)
+FOREACH (_ IN CASE WHEN task_data.assignee IS NULL THEN [] ELSE [1] END |
+    MERGE (p:Person {name: task_data.assignee})
+    MERGE (p)-[:ASSIGNED_TO]->(t)
+)
 
 // Task -[:WAITING_ON]-> Person
 WITH t, task_data
-WHERE task_data.waiting_on IS NOT NULL
-MERGE (p:Person {name: task_data.waiting_on})
-MERGE (t)-[:WAITING_ON]->(p)
+FOREACH (_ IN CASE WHEN task_data.waiting_on IS NULL THEN [] ELSE [1] END |
+    MERGE (p:Person {name: task_data.waiting_on})
+    MERGE (t)-[:WAITING_ON]->(p)
+)
 """
 
 # Query for finding blocked/hanging tasks
