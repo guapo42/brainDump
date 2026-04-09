@@ -248,16 +248,13 @@ WITH t, count(DISTINCT src) AS mention_count,
      max(src.received_at) AS last_mention,
      collect(DISTINCT src.sender_name) AS requesters
 OPTIONAL MATCH (t)-[:PART_OF]->(proj:Project)
-WITH t, mention_count, last_mention, requesters, proj,
-     CASE
-       WHEN t.due_date IS NOT NULL AND t.due_date < date().toString()
-       THEN duration.between(date(t.due_date), date()).days
-       ELSE 0
-     END AS days_overdue
+WITH t, mention_count, last_mention, requesters, proj
 RETURN t.description AS task, t.due_date AS due_date,
        t.priority AS priority, proj.name AS project,
-       requesters, mention_count, days_overdue, last_mention,
-       (mention_count * 1.5 + days_overdue) *
+       requesters, mention_count, last_mention,
+       CASE WHEN t.due_date IS NOT NULL AND t.due_date < toString(date())
+            THEN 1 ELSE 0 END AS days_overdue,
+       toFloat(mention_count) * 1.5 *
          CASE t.priority
            WHEN 'critical' THEN 4 WHEN 'high' THEN 3
            WHEN 'medium' THEN 2 ELSE 1
