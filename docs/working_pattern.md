@@ -70,14 +70,30 @@ omitting it.
    class after a structural fix — a new one means the fix was incomplete; flag it.
    **This is the most valuable section.**
 3. **Tests added** — `test_name → catches: bug class (regression/preventive/new)`.
-4. **Integration points introduced** — `X → Y: ✅/⚠️/❌ with notes`. Both a unit
-   test (mocked) and a real-dependency test should exist. Don't end a phase with
-   ❌ unless deliberate; resolve or carry forward ⚠️.
+4. **Integration points introduced** — `X → Y: ✅/⚠️/❌ with notes`. For each new
+   seam, **both** a unit test (mocked dependency) and a real-dependency test must
+   exist. Don't maintain a parallel prose registry of integration tests — keep the
+   tests self-listing instead:
+   - mark them `@pytest.mark.integration` (real Neo4j/Chroma), `@pytest.mark.e2e`
+     (real Ollama), Playwright tagged `@e2e`;
+   - name them so collection reads like a map of the seam:
+     `test_int_<consumer>__<dependency>` / `test_contract_store__neo4j`
+     (e.g. `test_int_braindump_adapter__fastapi`);
+   - so `pytest --collect-only -m integration` *is* the registry. This section
+     records only the **delta** (the new seam + the two tests that prove it).
+   - Runtime-observed behavior that can't (yet) be automated goes on the
+     **manual** checklist (`docs/manual_acceptance.md`), not here.
+   Don't end a phase with ❌ unless deliberate; resolve or carry forward ⚠️.
 5. **Decisions made** — choices not in the spec, with reasoning (they're invisible
    in code but explain it later).
 6. **Open questions / carry-forward** — each with a suggested resolution path.
 7. **What would an independent reviewer find** — see prompt below.
-8. **Pre-flight items for next phase** — specific verifications that this phase's
+8. **Manual verification & sign-off** — paste the sign-off block from
+   `docs/manual_acceptance.md`: which standing items ran (phase ≤ N), PASS/FAIL
+   with one line of *observed evidence* each, and the phase hypothesis demo
+   observed working (backend off and on). Any FAIL is also a bug in Section 1.
+   A phase is **not approved** without this block.
+9. **Pre-flight items for next phase** — specific verifications that this phase's
    work still functions.
 
 ### Section 7 prompt — "what would an independent reviewer find"
@@ -164,7 +180,9 @@ patterns hide.
 
 "Structurally correct per code inspection," "tests pass" (without runtime
 exercise), or "verified via an alternative path" is **not** verification. Require
-exercised-and-observed evidence. Untrustworthy without runtime exercise:
+exercised-and-observed evidence — that is exactly what the
+`docs/manual_acceptance.md` checklist captures at the approval gate.
+Untrustworthy without runtime exercise:
 - React hooks under fake timers (visibility, ember ramp, anti-paralysis cadence);
 - component rendering with live store data (mocks hide shape bugs);
 - the `BrainDumpIntelligence` adapter against the real FastAPI service;
@@ -222,6 +240,13 @@ data point. A skipped retro breaks pattern recognition.
 ## Open Questions / Carry-Forward
 - Item. Suggested resolution: ...
 
+## Manual Verification & Sign-off — Phase N
+- Build/commit: <hash>   Date: <date>   Backend: off/on   Ollama: off/on
+- Standing items run (phase ≤ N): A ✓ · B ✓ · C ✓ · ...
+  - Any FAIL: <item> → observed <what happened> → bug #<class>
+- Phase-N hypothesis demo: PASS — observed: <one line of evidence>
+- Approved by: <name>
+
 ## Independent Reviewer (Section 7)
 - Vocabulary drift: ...
 - Seam honesty: ...
@@ -265,5 +290,6 @@ data point. A skipped retro breaks pattern recognition.
 
 - `CLAUDE.md` — every-session project context (references this doc).
 - `specs/00–05` — design source of truth.
+- `docs/manual_acceptance.md` — the manual approval-gate checklist.
 - `docs/retrospectives/` — per-phase retros (chronological).
 - `docs/carry_forward.md` — live deferral list.

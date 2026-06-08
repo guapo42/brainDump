@@ -233,7 +233,8 @@ These are the recurring failure modes for this stack. Treat them as hard rules.
 ### A phase is **Done** when
 1. Every in-scope acceptance criterion has a test.
 2. The phase's **demo hypothesis runs** — backend **off** (where applicable) and
-   **on**.
+   **on** — and the standing **Manual Acceptance** checklist
+   (`docs/manual_acceptance.md`) passes with recorded evidence in the retro.
 3. `typecheck` + `lint` clean; pure-logic near 100% branch coverage; the relevant
    simulation/contract gate still green (no regression).
 4. Separation checks (app↔sim, app↔backend, sim↔adapters) pass.
@@ -352,6 +353,9 @@ In brief:
   checks pass, review cumulative bug-class counts (any class with 2+ occurrences
   gets a structural fix *before* new feature work), and read carry-forward items
   targeting this phase.
+- **Before approving a phase**: run the standing **Manual Acceptance** checklist
+  (`docs/manual_acceptance.md`) and paste the sign-off (with observed evidence)
+  into the retro. A phase isn't approved without it.
 - A bug class with three occurrences is a signal to fix the design, not patch
   again. "Tests pass / looks right per inspection" is **not** verification for
   runtime behavior (hooks under fake timers, components with live data, the live
