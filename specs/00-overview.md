@@ -1,5 +1,13 @@
 # Brain Dump — Rebuild Overview
 
+> **Update (frontend pivot):** the product frontend is now *The External Lobe*,
+> a React/Next local-first cognitive cockpit, with Brain Dump (Python) as an
+> optional intelligence service behind an `IntelligenceService` port. This
+> **supersedes the htmx decision** in §5 below and the htmx/FastAPI-as-UI parts
+> of `01`/`03`. See **`04-integrated-design.md`** (the seam) and
+> **`05-iterative-plan.md`** (the re-sequenced roadmap). The backend internals
+> in `01`/`02` remain valid.
+
 > This is the foundation document for a clean, test-driven reimplementation of
 > Brain Dump. It is extracted from the existing prototype (see "Provenance"
 > below) and reorganized around two hard rules: **every feature must be
@@ -97,8 +105,9 @@ source material:
 
 | Decision | Choice | Notes |
 |---|---|---|
-| Frontend | **Plain HTML + htmx** (Jinja2 templates) | Server-rendered partials swapped over the wire; minimal JS. |
-| Backend API | **FastAPI + OpenAPI** | Typed, auto-documented; tested with `httpx`/`TestClient`. |
+| Frontend | ~~Plain HTML + htmx~~ → **React/Next local-first** (*The External Lobe*) | Superseded by `04`. Rich client (rAF graph, SVG dial, client FSM, offline capture); Zustand + Framer Motion + Vitest. |
+| Backend API | **FastAPI + OpenAPI** (JSON intelligence API only) | No server-rendered UI; serves the `IntelligenceService` adapter. Typed; tested with `httpx`/`TestClient`. |
+| Data authority | **Local-first; backend syncs** | Client (IndexedDB/Zustand) owns live cognitive state; backend adds sources + enrichment additively (`04 §7`). |
 | Scope | **Core-first** | Ingest, graph/vector, query suite, scoring, nudge. |
 | Connector | **Jira** (new) | Replaces Outlook/Slack for v1 — gives real structured task data to validate against. |
 | LLM backend | **Ollama only** | Azure/Bedrock abstraction preserved but deferred. |
