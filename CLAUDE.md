@@ -140,15 +140,18 @@ If a phase spec implies a different choice, flag it rather than switching.
 - **Animation**: Framer Motion (spring configs per the spec §10).
 - **Unit/component tests**: Vitest + jsdom + `@testing-library/react` +
   `jest-dom`. **E2E**: Playwright (stubbed LLM + stubbed backend).
-- **LLM**: local Ollama (`http://localhost:11434`) from the browser Translator;
+- **LLM**: a **local OpenAI-compatible server** (Ollama *or* llama.cpp — chosen
+  by config, never hardcoded; see ADR 0005) reached from the browser Translator;
   heuristic fallback always present.
 - **Scripts**: `npm run test | test:watch | lint | typecheck | build`.
 
 ### Backend (`/backend`)
 - **API**: FastAPI + Pydantic v2 — **JSON intelligence API only** (no
   server-rendered UI; the earlier htmx plan is superseded by `specs/04`).
-- **LLM extraction**: `instructor` + Ollama in **JSON mode** (`instructor.Mode.JSON`).
-  Azure/Bedrock branches kept as deferred stubs.
+- **LLM extraction**: `instructor` over a **local OpenAI-compatible server**
+  (Ollama/llama.cpp, config-selected — ADR 0005) in **JSON mode**
+  (`instructor.Mode.JSON`). Provider chosen via `LLM_BASE_URL`/`LLM_MODEL`, never
+  hardcoded. Azure/Bedrock branches kept as deferred stubs.
 - **Graph**: Neo4j. **Vector**: ChromaDB. Both via Docker Compose.
 - **Source connector (v1)**: Jira (structured + enriched modes). Outlook/Slack
   deferred behind the `Connector` protocol.
@@ -176,7 +179,7 @@ If a phase spec implies a different choice, flag it rather than switching.
   `*.test.ts(x)`.
 
 ### Python (backend)
-- Python 3.12 syntax: `match`, `|` unions, `StrEnum`, `pathlib.Path`,
+- Python 3.11+ syntax: `match`, `|` unions, `StrEnum`, `pathlib.Path`,
   timezone-aware `datetime` (UTC; never naive).
 - Type hints on all signatures incl. private helpers. Docstrings on public
   functions/classes. Line length 100. f-strings only.
@@ -280,9 +283,9 @@ phases — they compound.
   hidden / off-screen. Test the stop conditions explicitly.
 - **In-memory ↔ Neo4j drift.** The backend's two stores must pass the *same*
   contract suite. If a query result differs, that's a bug, not a backend quirk.
-- **Ollama JSON mode, not tool-calling.** Local model tool-call support is
-  inconsistent; use `instructor.Mode.JSON`. The structured Jira mode needs no LLM
-  at all — prefer it for deterministic tests.
+- **JSON mode, not tool-calling.** Local model tool-call support is inconsistent
+  across servers; use `instructor.Mode.JSON` (works on Ollama and llama.cpp alike).
+  The structured Jira mode needs no LLM at all — prefer it for deterministic tests.
 - **Port-shape drift.** When the backend response changes, update the recorded
   fixtures *and* the `IntelligenceService` types together, or the FE/BE silently
   diverge. The seam contract test is the guard.
@@ -301,8 +304,8 @@ phases — they compound.
   implementations deferred).
 - Server-rendered UI / htmx (superseded — FastAPI is JSON-only).
 - Multi-user auth, RBAC, multi-device sync (single local user assumed).
-- Cloud LLM by default (local Ollama first; cloud only behind the PII scrubber if
-  ever enabled).
+- Cloud LLM by default (local OpenAI-compatible server first; cloud only behind
+  the PII scrubber if ever enabled).
 - Real-time webs/SSE push (REST polling for v1 unless a phase says otherwise).
 
 If a feature seems useful but isn't in the current phase, it's out of scope.

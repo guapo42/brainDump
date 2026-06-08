@@ -110,7 +110,7 @@ source material:
 | Data authority | **Local-first; backend syncs** | Client (IndexedDB/Zustand) owns live cognitive state; backend adds sources + enrichment additively (`04 §7`). |
 | Scope | **Core-first** | Ingest, graph/vector, query suite, scoring, nudge. |
 | Connector | **Jira** (new) | Replaces Outlook/Slack for v1 — gives real structured task data to validate against. |
-| LLM backend | **Ollama only** | Azure/Bedrock abstraction preserved but deferred. |
+| LLM backend | **Local OpenAI-compatible server** (Ollama *or* llama.cpp — config-selected; provider deferred, ADR 0005) | Azure/Bedrock abstraction preserved but deferred. |
 | Deferred | Outlook, Slack, Azure, Bedrock | Re-add behind the same connector/extractor interfaces post-v1. |
 
 ## 6. Glossary
