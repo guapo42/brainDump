@@ -7,3 +7,18 @@ data/
 logs/
 .msal_token_cache.json
 .outlook_cursor
+
+# --- monorepo P0 ---
+# python
+backend/.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+# node / next
+app/node_modules/
+app/.next/
+app/coverage/
+# env
+.env
