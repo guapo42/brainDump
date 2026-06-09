@@ -313,6 +313,15 @@ phases — they compound.
   the PII scrubber if ever enabled).
 - Real-time webs/SSE push (REST polling for v1 unless a phase says otherwise).
 
+- **Generalizing for hypothetical other users.** No configurability, theming, or
+  abstraction whose only justification is "someone else might want it." Build the
+  one thing *you* want; selling it later is downstream of it being great for you.
+- **The spec's UI variation menus.** The External Lobe spec lists alternatives
+  (Radial/Linear/Stacked time-dial; Split/Notebook/Terminal second brain; four
+  capture surfaces). Build **one** of each that earns daily use; the others are
+  A/B research luxuries, not N=1 needs. Add a variation only if daily use demands
+  it.
+
 If a feature seems useful but isn't in the current phase, it's out of scope.
 
 ---
@@ -330,18 +339,35 @@ This costs less than discovering at P7 that P2 made a wrong choice.
 
 ---
 
-## Part XIII — The audience & what we value
+## Part XIII — The north star & what we value
 
-Building for people with ADHD who need *zero-friction capture* and *calm,
-peripheral urgency* — and for developers validating that local-first + an
-optional intelligence backend is a sound architecture.
+**Primary success criterion (the one that matters):** the builder uses this
+**day to day** and it measurably improves their **responsiveness** (not dropping
+balls with colleagues/stakeholders) and **productivity** (starting and finishing
+real work). It is a tool for **one user — you**. If it later helps others or
+becomes sellable, that is a *welcome side effect of being genuinely good for the
+builder*, never a design input now. Build for N=1 (ADR 0007).
+
+Every feature is judged by one question: **"will I open this and does it make me
+better at my job this week?"** A beautiful feature that goes unused is a failure,
+not a partial win.
+
+The two halves of the goal map to different parts of the system — keep both in
+view:
+- **Productivity / initiation** → capture + energy-ranked surfacing + the focus
+  loop (the Anchor cockpit). Lands P1–P3, no backend.
+- **Responsiveness / not dropping balls** → surfacing what you owe people and
+  when (forgetting, nudge, relationship health). This needs *commitments* in the
+  system — capture them locally from P2 (see specs/05) so this value arrives
+  before the Jira backend does.
 
 **Value:** clarity; <100ms interactions that never block on network/LLM; full
 offline function; honest separation between deterministic Anchor logic and
 LLM suggestion; the frustration→surfacing coupling actually working.
 
 **Don't value:** cleverness, novel UI for its own sake, abstractions without a
-second caller, anything that makes the app depend on the backend to function.
+second caller, generalizing for hypothetical *other* users, anything that makes
+the app depend on the backend to function.
 
 ---
 

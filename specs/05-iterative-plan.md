@@ -61,6 +61,41 @@ So success is defined behaviorally, and the plan has explicit cut lines:
   the product (the canonical ICNU is client-side; ADR 0004). Build it last, or
   not at all if daily use says the time is better spent elsewhere.
 
+### What the goal implies for sequencing (ADR 0007)
+
+The stated goal has **two halves**, and the plan must serve both — they map to
+different parts of the system:
+
+- **Productivity / initiation** — capture + energy-ranked surfacing + focus loop.
+  This is exactly P1–P3, no backend. The MVP already covers it.
+- **Responsiveness / not dropping balls** — surfacing *what you owe people and
+  when*: forgetting, nudge, relationship health. This needs **commitments in the
+  system**, which the plan otherwise defers to the Jira backend at P4. That's too
+  late for a co-primary goal.
+
+**Move commitments forward.** The P2 capture model must let a captured item carry
+a **requester** and a **promised/-due date** (optional fields on the local task).
+Then `LocalIntelligence.forgetting()` can rank neglected commitments **offline**,
+and the nudge/forgetting surfaces deliver responsiveness value **at P3, before
+any backend**. P4 (Jira) then *automates* commitment ingestion rather than being
+the only way to get it. Acceptance: at P3, manually capturing "owe Dana the spec
+by Fri" surfaces it in the forgetting/nudge view as the date approaches — no
+backend running.
+
+### Scope discipline for N=1 (ADR 0007)
+
+- **One of each UI surface.** Pick a single capture surface (recommend Lightning
+  Capture + Cmd-K), a single time visualization (recommend the Radial dial), and
+  treat the second-brain views as deferred. The spec's variation menus are A/B
+  luxuries, not daily needs.
+- **P6 (knowledge graph) is the prime cut candidate** — the feature least likely
+  to be opened daily. Gate it hard at its pre-flight on "would I actually use
+  this?"; cut or shrink to a simple linked-list/back-references view if not.
+- **Weekly effectiveness check** (from P3): in the milestone synthesis, answer in
+  one line — *did this week's build make me more responsive / more productive?*
+  Qualitative; no analytics infrastructure. If "no" two checks running, stop
+  adding features and fix what you actually use.
+
 ## Phase 0 — Foundations & the seam *(blocks all)*
 
 **Hypothesis:** we can stand up a test-first repo where the frontend is fully
@@ -109,10 +144,15 @@ flipping energy 1↔5 visibly re-ranks. Unit tests pin every weight/threshold.
 - Schema validator + type guards + scrubber (fix spaced-card regex). [M4, M5]
 - Stores (`useStore`, `useAnchorStore`, undo) through `safeStorage`. [M8]
 - Lightning Capture + Capture Modal (Cmd-K). [M11 subset]
+- **Commitment fields (responsiveness, ADR 0007):** the local task carries
+  optional `requester` and `promised/due` date; the heuristic parser fills them
+  from cues (`for <name>`, `by <date>`). This is what lets the P3 forgetting/
+  nudge surfaces work offline.
 
-**Gate/Demo:** with Ollama **off**, type a thought → a valid `Task` appears on
-the belt in < 3s (heuristic); with Ollama **on**, it's structured. Friction > 5s
-logged. Tests stub the client (no real model).
+**Gate/Demo:** with the LLM server **off**, type a thought → a valid `Task`
+appears on the belt in < 3s (heuristic); with it **on**, it's structured.
+Capturing "owe Dana the draft by Friday" records the requester + date. Friction
+> 5s logged. Tests stub the client (no real model).
 
 ---
 

@@ -41,6 +41,9 @@ are runtime-only and lie to code inspection and to "tests pass."
       urgent-simple on top at 1, interesting/challenging on top at 5.
 - [ ] **[P3]** Energy input is **optional**: with no energy ever set, the app
       surfaces sensibly (defaults to 3) and never prompts for it.
+- [ ] **[P3]** Responsiveness loop, offline (ADR 0007): capture "owe Dana the
+      draft by Friday" → it carries requester + date → it surfaces in the
+      forgetting/nudge view as the date nears, with no backend running.
 - [ ] **[P3]** Capture/select/complete interactions feel **< 100ms**; no jank.
 
 ### C. The cockpit / focus loop
