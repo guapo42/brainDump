@@ -1,12 +1,15 @@
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+const root = fileURLToPath(new URL(".", import.meta.url));
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { "@": resolve(__dirname, ".") },
+    alias: { "@": root },
   },
   test: {
     // Node by default; opt into jsdom per-file via `// @vitest-environment jsdom`.

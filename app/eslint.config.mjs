@@ -1,15 +1,15 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import js from "@eslint/js";
+import globals from "globals";
+import tseslint from "typescript-eslint";
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
+export default tseslint.config(
+  { ignores: ["dist/**", "coverage/**"] },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
 
-  // Allow intentionally-unused args/vars when prefixed with `_` (e.g. interface
-  // stubs that must keep a parameter name for documentation).
   {
     files: ["**/*.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.browser } },
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "warn",
@@ -45,7 +45,7 @@ const eslintConfig = defineConfig([
   // --- Boundary: app surfaces reach the backend ONLY via the IntelligenceService
   // factory, never a concrete adapter or backend code (CLAUDE.md Part III). ---
   {
-    files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "hooks/**/*.{ts,tsx}", "stores/**/*.{ts,tsx}"],
+    files: ["components/**/*.{ts,tsx}", "hooks/**/*.{ts,tsx}", "stores/**/*.{ts,tsx}", "App.tsx", "main.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -68,14 +68,4 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
-]);
-
-export default eslintConfig;
+);
