@@ -39,6 +39,8 @@ are runtime-only and lie to code inspection and to "tests pass."
 - [ ] **[P2]** Ollama ON: the same capture is richer/structured, still feels < 3s.
 - [ ] **[P1]** Move the energy slider **1 ↔ 5**: the belt visibly re-ranks —
       urgent-simple on top at 1, interesting/challenging on top at 5.
+- [ ] **[P3]** Energy input is **optional**: with no energy ever set, the app
+      surfaces sensibly (defaults to 3) and never prompts for it.
 - [ ] **[P3]** Capture/select/complete interactions feel **< 100ms**; no jank.
 
 ### C. The cockpit / focus loop
@@ -71,7 +73,10 @@ are runtime-only and lie to code inspection and to "tests pass."
       show ("asked 3×", "escalated to HR").
 - [ ] **[P5]** Relationship-health view renders from real REQUESTED_BY data.
 - [ ] **[P7]** Morning Airlock (07:00–09:00, inject the clock) collapses to the
-      Brain Dump, seeded by the overnight sync; unlocks after one capture.
+      Brain Dump, seeded by the overnight sync; unlocks after one capture **and**
+      has a visible skip affordance — the gate nudges, it never traps (a
+      one-character capture or "skip" always releases it; no data is hidden
+      behind it, only navigation).
 
 ### F. Performance / resource
 - [ ] **[P6]** Open the knowledge graph, let it settle → the render loop **halts**

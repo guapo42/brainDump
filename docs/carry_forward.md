@@ -18,3 +18,17 @@ Live list of deferrals. Each item: origin → acceptance criteria. Remove when d
   ESLint `no-restricted-imports` rules prove too coarse.
 - **`make dev` smoke** (origin P0 retro) → run `npm run dev` and confirm the page
   renders with no console errors (not exercised in the P0 build container).
+- **Next 16 / React 19 are bleeding-edge** (origin P0 scaffold) → by end of P2:
+  either affirm (no ecosystem friction observed with Zustand/Framer
+  Motion/Testing Library) or pin back to Next 15/React 18 while the surface is
+  still small.
+- **Browser → local LLM CORS** (origin plan review) → at P2 (Translator):
+  browser calls to a local server need CORS — Ollama requires `OLLAMA_ORIGINS`,
+  llama.cpp needs `llama-server` CORS flags. Verify both, document in
+  `backend/.env.example` comments; the heuristic fallback must mask a CORS
+  failure gracefully (it looks like "LLM down").
+- **P5 tone-signal gap with real Jira data** (origin plan review, specs/04
+  §9.2) → decide at P5 pre-flight: enrich Jira *comments* via LLM to recover
+  follow-up/tone signals, or recalibrate the headline-demo criteria to
+  mentions+overdue+priority. Until then the full formula is validated by the
+  sim only.

@@ -89,6 +89,11 @@ Phases assume earlier phases are complete. Don't redo prior work; don't skip
 ahead. If a phase seems wrong given earlier ones, **ask before improvising**
 (Part I §1).
 
+**Exploration is cheap by design:** untested ideas go through the **spike lane**
+(`docs/working_pattern.md`) — a timeboxed `spike/<topic>` branch exempt from the
+gates, whose output is knowledge + a task brief, never merged code. Hand-off
+sized work units live in `specs/tasks/` (one brief = one small-context session).
+
 ---
 
 ## Part III — Architecture
@@ -135,8 +140,8 @@ If a phase spec implies a different choice, flag it rather than switching.
 ### Frontend (`/app`)
 - **Framework**: Next.js (App Router) + TypeScript. Not Vue, not Svelte, not CRA.
 - **Styling**: Tailwind. Custom CSS only when unavoidable.
-- **State**: Zustand + `persist` middleware → IndexedDB/localStorage **via the
-  `safeStorage` wrapper only**.
+- **State**: Zustand + `persist` middleware → localStorage (v1; IndexedDB later
+  behind the same adapter — ADR 0006) **via the `safeStorage` wrapper only**.
 - **Animation**: Framer Motion (spring configs per the spec §10).
 - **Unit/component tests**: Vitest + jsdom + `@testing-library/react` +
   `jest-dom`. **E2E**: Playwright (stubbed LLM + stubbed backend).

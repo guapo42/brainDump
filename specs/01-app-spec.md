@@ -1,8 +1,15 @@
-# Brain Dump — App Specification (the product)
+# Brain Dump — App Specification (backend internals)
 
-This is the spec for the live product: ingestion, storage, the query/scoring
-suite, the Jira connector, the FastAPI API, and the htmx frontend. The
-Simulation Test Harness is specified separately in `02-simulation-spec.md`.
+> **Partially superseded by `04-integrated-design.md`.** The frontend pivoted to
+> React/Next local-first (ADR 0001): **§8 (htmx frontend) is dead** — do not
+> build it — and §7's FastAPI is a **JSON intelligence API only** (no HTML
+> routes, no `/ui/*`). §§1–6 (domain model, ingestion, Store Protocol, query
+> suite + scoring, Jira connector) remain the source of truth for backend
+> internals. "Ollama" reads as "any local OpenAI-compatible server" (ADR 0005).
+
+This is the spec for the backend service: ingestion, storage, the query/scoring
+suite, the Jira connector, and the FastAPI JSON API. The Simulation Test Harness
+is specified separately in `02-simulation-spec.md`.
 
 Everything here is **backend-agnostic above the Store Protocol** (§4). The
 query suite and scoring (§5) are pure functions over data the store returns;

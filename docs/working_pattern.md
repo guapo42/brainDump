@@ -55,6 +55,29 @@ work. The cost of three occurrences exceeds the cost of fixing the design.
 
 ---
 
+## The Spike Lane (testing ideas without the ceremony)
+
+The phase discipline protects the trunk; it must not make experimentation
+expensive. Ideas get a sanctioned fast path:
+
+- Branch `spike/<topic>`, **timeboxed (≤1 day)**. No DoD, no retro, no coverage
+  gates, no manual acceptance — write whatever throwaway code answers the
+  question fastest.
+- A spike **never merges to `main`**. Its output is *knowledge*: a one-line
+  outcome in `docs/carry_forward.md` (keep/kill/changed-my-mind) and, if kept, a
+  **task brief** (`specs/tasks/`) that re-implements the idea test-first on the
+  trunk.
+- If a spike invalidates part of a spec, update the spec (or file the conflict)
+  before the brief is written — don't let trunk code race a stale spec.
+- Spikes are exempt from the separation rules *except*: never point a spike at
+  real user data with PII, and never publish one as if it were the product.
+
+Rule of thumb: **if you're arguing with the process, spike it.** The process
+exists to make the keeper version cheap to build correctly, not to gatekeep
+curiosity.
+
+---
+
 ## Retrospective Format
 
 Seven sections. If a section has nothing to record, say so explicitly rather than

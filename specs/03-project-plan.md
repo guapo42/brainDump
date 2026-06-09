@@ -1,5 +1,10 @@
 # Brain Dump — Project Plan (from-scratch rebuild)
 
+> **Superseded by `05-iterative-plan.md`** for sequencing and scope. Retained
+> because `05`'s source-plan mapping references these backend phases (P1–P5, P8,
+> P9) for their implementation detail. Ignore the htmx frontend phases (P6 here)
+> and any FastAPI-as-UI content — see ADR 0001 and `04-integrated-design.md`.
+
 A phased plan optimized for **validating each feature as it lands** and
 **co-developing the htmx frontend alongside the backend**. Three workstreams
 run in parallel, synchronized at phase gates:

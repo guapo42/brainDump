@@ -198,6 +198,11 @@ There are deliberately two ICNU notions; keep them separate and mapped:
   test.**
 - The backend sim ICNU stays where it is: a regression net for backend scoring,
   not shipped to the client.
+- **Energy input must never become friction (P1 guard):** the app never *asks*
+  for an energy level. It defaults to **3 (balanced)**, surfacing works without
+  any input, and the slider is a one-gesture optional adjustment. An ADHD tool
+  that interrogates its user about their dopamine state before helping them has
+  failed its own premise.
 
 ---
 
@@ -305,6 +310,7 @@ backend blocks building and demoing the full cockpit first.
 | Two ICNU scales/definitions | §5: product 0–10 energy-weighted is canonical; backend gives hints + frustration bridge; sim ICNU is validation-only. |
 | Backend assumes Neo4j/Chroma/Docker; client is local-first/offline | Backend is *optional*; `LocalIntelligence` covers offline; backend merged additively. |
 | Backend `today` passed in for determinism; client uses real clock | Client injects `now` in pure logic (already required by spec); sync passes explicit dates. |
+| **Frustration scoring leans on tone signals (escalation, follow-ups, temperature) that Jira *structured* mode doesn't carry** — only the sim's scripted agents and (later) email provide them | At P5, run Jira **comments** through enriched mode to recover follow-ups/tone, *or* accept that real-data scores rest on mentions + days_overdue + priority and calibrate the headline demo accordingly. Decide at P5 pre-flight (carry-forward filed). The sim remains the full-signal validation of the formula either way. |
 | Backend has no "energy"/"focus state" | Stays that way — client-only; optionally logged as a signal, never as logic. |
 | Earlier htmx/FastAPI-as-UI assumption | FastAPI is now a **JSON intelligence API only**; no server-rendered UI. Drop `api/ui.py`, templates, Playwright-against-htmx from `01/03`. |
 

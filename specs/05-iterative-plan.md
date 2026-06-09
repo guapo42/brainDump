@@ -36,6 +36,31 @@
 
 ---
 
+## Success definition & cut lines
+
+The biggest risk to this project is not a wrong abstraction — it is building a
+large, two-stack system that never becomes something its builder actually uses.
+So success is defined behaviorally, and the plan has explicit cut lines:
+
+- **Success (v1):** the builder uses the app **daily** as their real capture +
+  task-surfacing tool, and prefers it to whatever they used before. Everything
+  else (graph, RAG, relationship health) is judged by whether it deepens that.
+- **Daily-driver gate:** from **P3** onward, every phase's Definition of Done
+  includes **≥3 days of real personal use** of the build, with friction notes
+  filed to `docs/carry_forward.md`. A phase whose feature went unused in those
+  days gets questioned before the next phase starts.
+- **MVP cut line = P0–P3.** If the project stopped after P3 it should still be a
+  win: an offline, zero-friction capture + energy-ranked cockpit. **P4 (Jira)
+  earns its place only if external tasks are part of daily reality.**
+- **Value ladder, not a contract:** P5–P7 each re-justify themselves against
+  actual usage at their pre-flight. Skipping or reordering them is allowed; the
+  gates travel with the phase.
+- **P8 is split:** the **passive simulation** (P2) and the **seed-fixture
+  export** are required regression/demo infrastructure. The **ADHD cognitive
+  agent** is explicitly **stretch** — it validates backend scoring realism, not
+  the product (the canonical ICNU is client-side; ADR 0004). Build it last, or
+  not at all if daily use says the time is better spent elsewhere.
+
 ## Phase 0 — Foundations & the seam *(blocks all)*
 
 **Hypothesis:** we can stand up a test-first repo where the frontend is fully
