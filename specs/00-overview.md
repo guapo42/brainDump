@@ -1,7 +1,8 @@
 # Brain Dump — Rebuild Overview
 
 > **Update (frontend pivot):** the product frontend is now *The External Lobe*,
-> a React/Next local-first cognitive cockpit, with Brain Dump (Python) as an
+> a Vite + React local-first cognitive cockpit (Tauri desktop shell, ADR 0008),
+> with Brain Dump (Python) as an
 > optional intelligence service behind an `IntelligenceService` port. This
 > **supersedes the htmx decision** in §5 below and the htmx/FastAPI-as-UI parts
 > of `01`/`03`. See **`04-integrated-design.md`** (the seam) and
@@ -105,7 +106,7 @@ source material:
 
 | Decision | Choice | Notes |
 |---|---|---|
-| Frontend | ~~Plain HTML + htmx~~ → **React/Next local-first** (*The External Lobe*) | Superseded by `04`. Rich client (rAF graph, SVG dial, client FSM, offline capture); Zustand + Framer Motion + Vitest. |
+| Frontend | ~~Plain HTML + htmx~~ → ~~React/Next~~ → **Vite + React local-first**, Tauri desktop shell (*The External Lobe*) | Superseded by `04`; host/shell by ADR 0008. Rich client (rAF graph, SVG dial, client FSM, offline capture); Zustand + Framer Motion + Vitest. |
 | Backend API | **FastAPI + OpenAPI** (JSON intelligence API only) | No server-rendered UI; serves the `IntelligenceService` adapter. Typed; tested with `httpx`/`TestClient`. |
 | Data authority | **Local-first; backend syncs** | Client (IndexedDB/Zustand) owns live cognitive state; backend adds sources + enrichment additively (`04 §7`). |
 | Scope | **Core-first** | Ingest, graph/vector, query suite, scoring, nudge. |

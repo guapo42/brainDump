@@ -7,6 +7,12 @@
 >   the FSM reducer takes `at` on every event (see `specs/tasks/P1-M3-fsm.md`).
 > - **Persistence (ADR 0006):** localStorage first via `safeStorage`; IndexedDB
 >   later behind the same adapter.
+> - **Host & shell (ADR 0008):** the app is a **Vite + React** SPA packaged as a
+>   **Tauri desktop app** — an always-on-top corner widget + global-hotkey
+>   capture + tray + a full-view window. It renders **two surfaces** (compact
+>   widget / full view); capture is *summoned*, not navigated to. Where this spec
+>   says "browser," read "host-agnostic webview." §6's capture surfaces and §7/§8
+>   render inside that shell.
 > - **N=1 scope (ADR 0007, CLAUDE.md Part XI):** build **one** of each UI
 >   surface; the variation menus (§7.2, §8.2, multiple capture surfaces) are
 >   deferred. Energy input is optional and never prompted (specs/04 §5). The

@@ -16,17 +16,22 @@ Live list of deferrals. Each item: origin → acceptance criteria. Remove when d
   llama.cpp; record a follow-up ADR; no call-site changes (config only).
 - **Boundary linter upgrade** (origin P0) → consider `dependency-cruiser` if the
   ESLint `no-restricted-imports` rules prove too coarse.
-- **`make dev` smoke** (origin P0 retro) → run `npm run dev` and confirm the page
-  renders with no console errors (not exercised in the P0 build container).
-- **Next 16 / React 19 are bleeding-edge** (origin P0 scaffold) → by end of P2:
-  either affirm (no ecosystem friction observed with Zustand/Framer
-  Motion/Testing Library) or pin back to Next 15/React 18 while the surface is
-  still small.
-- **Browser → local LLM CORS** (origin plan review) → at P2 (Translator):
-  browser calls to a local server need CORS — Ollama requires `OLLAMA_ORIGINS`,
-  llama.cpp needs `llama-server` CORS flags. Verify both, document in
-  `backend/.env.example` comments; the heuristic fallback must mask a CORS
-  failure gracefully (it looks like "LLM down").
+- **`make dev` smoke** (origin P0 retro) → run `npm run dev` (Vite) and confirm
+  the page renders with no console errors (not exercised in the build container).
+- **React 19 + Vite stack** (origin P0 scaffold; host switched to Vite per ADR
+  0008) → by end of P2, affirm no ecosystem friction (Zustand, Framer Motion,
+  Testing Library) while the surface is small.
+- **Tauri toolchain (Rust)** (origin ADR 0008) → install at the **P3.5 shell
+  phase** only; not needed before. Verify always-on-top + global-hotkey + tray on
+  the target OS.
+- **macOS WKWebView Web Speech** (origin ADR 0008) → at P3.5, confirm voice
+  capture availability in the Tauri webview; ensure graceful text fallback when
+  absent.
+- **Local-LLM connectivity (CORS vs Tauri HTTP)** (origin plan review + ADR 0008)
+  → at P2 (Translator) in browser dev, the local server needs CORS (Ollama
+  `OLLAMA_ORIGINS`; llama.cpp `llama-server` flags). Inside Tauri (P3.5), prefer
+  Tauri's HTTP capability to sidestep CORS. Either way the heuristic fallback must
+  mask a connectivity failure gracefully (looks like "LLM down").
 - **P5 tone-signal gap with real Jira data** (origin plan review, specs/04
   §9.2) → decide at P5 pre-flight: enrich Jira *comments* via LLM to recover
   follow-up/tone signals, or recalibrate the headline-demo criteria to

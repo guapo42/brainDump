@@ -56,8 +56,9 @@ overcomplication, clarifying questions *before* implementation not after.
 **Brain Dump × The External Lobe** — a local-first ADHD executive-function
 cockpit. One product, two halves joined at a single seam:
 
-- **The External Lobe** (frontend) — a React/Next local-first **Triple-Engine**
-  app: **Pilot** (human capture) → **Translator** (LLM structuring) → **Anchor**
+- **The External Lobe** (frontend) — a Vite + React local-first **Triple-Engine**
+  app (Tauri desktop shell; ADR 0008): **Pilot** (human capture) → **Translator**
+  (LLM structuring) → **Anchor**
   (deterministic core: ICNU+energy, FSM, schema validation, guardrails). Fully
   usable offline.
 - **Brain Dump** (backend) — an *optional* Python intelligence service: ingests
@@ -138,7 +139,12 @@ If a phase spec implies crossing one of these, that's a bug in the spec; flag it
 If a phase spec implies a different choice, flag it rather than switching.
 
 ### Frontend (`/app`)
-- **Framework**: Next.js (App Router) + TypeScript. Not Vue, not Svelte, not CRA.
+- **Framework**: Vite + React + TypeScript (local-first SPA). Not Next, not Vue,
+  not CRA — host-agnostic so it runs in a browser (dev) or a Tauri webview.
+- **Shell (ADR 0008)**: packaged as a **Tauri desktop app** — always-on-top
+  corner widget + global hotkey capture + system tray + a full-view window. The
+  app renders **two surfaces** (compact widget / full view); capture is
+  *summoned*, never navigated to. Tauri lands ~P3.5; build host-agnostic until.
 - **Styling**: Tailwind. Custom CSS only when unavoidable.
 - **State**: Zustand + `persist` middleware → localStorage (v1; IndexedDB later
   behind the same adapter — ADR 0006) **via the `safeStorage` wrapper only**.
@@ -278,9 +284,12 @@ phases — they compound.
 
 ## Part X — Common pitfalls (will trip you up)
 
-- **Next App Router server vs client components.** Stores, hooks, browser APIs,
-  and Framer Motion are client-only — mark `"use client"`. Don't leak
-  `safeStorage`/`window` into server components.
+- **Tauri webview differences.** macOS uses WKWebView (no Web Speech API → voice
+  capture degrades to text; feature-detect). It's a static SPA — no SSR, no
+  server components. Always-on-top, global hotkey, tray, and multi-window live in
+  the **Tauri shell**, not the React app; the app just renders the compact/full
+  surfaces. From the webview, reach the local LLM/backend via Tauri's HTTP
+  capability to sidestep CORS.
 - **jsdom lacks browser APIs.** `SpeechRecognition`, `AudioContext`,
   `IntersectionObserver`, `visibilityState` aren't in jsdom — feature-detect in
   code, mock in tests, assert graceful absence.

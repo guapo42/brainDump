@@ -3,8 +3,10 @@
 A local-first ADHD executive-function cockpit. One product, two halves joined at a
 single seam:
 
-- **The External Lobe** (`/app`) — a React/Next local-first **Triple-Engine** app
-  (Pilot → Translator → Anchor). Fully usable offline.
+- **The External Lobe** (`/app`) — a local-first **Triple-Engine** app
+  (Pilot → Translator → Anchor) in Vite + React, packaged as a **Tauri desktop
+  app** (always-on-top corner widget + global-hotkey capture; ADR 0008). Fully
+  usable offline.
 - **Brain Dump** (`/backend`) — an *optional* Python intelligence service: ingests
   external sources (Jira first), maintains a Neo4j/Chroma knowledge graph, and
   pushes back enrichment. Makes the app *smarter*, never *functional*.
@@ -15,9 +17,9 @@ stub; the backend is a drop-in adapter.
 ## Layout
 
 ```
-app/        React/Next frontend (local-first)
+app/        Vite + React frontend (local-first; Tauri shell at P3.5)
 backend/    FastAPI intelligence service (optional)
-specs/      design source of truth (00 overview → 05 iterative plan)
+specs/      design source of truth (00 overview → 07 TDD plan)
 docs/       working pattern, manual acceptance, ADRs, retrospectives
 fixtures/   recorded JSON shared by FE adapter tests + BE (from P4)
 legacy/     the original prototype — reference only, do not extend

@@ -101,10 +101,10 @@ backend running.
 **Hypothesis:** we can stand up a test-first repo where the frontend is fully
 decoupled from the backend.
 
-- Monorepo: `/app` (Next App Router, TS, Tailwind, Zustand, Framer Motion,
-  Vitest + jsdom + Testing Library), `/backend` (Python, pytest, ruff, mypy),
-  `/specs`, `/fixtures` (shared recorded JSON).
-- `safeStorage` wrapper first (SSR/quota/corrupt-JSON). [External Lobe M0]
+- Monorepo: `/app` (Vite + React, TS, Tailwind, Zustand, Framer Motion,
+  Vitest + jsdom + Testing Library; Tauri shell added P3.5), `/backend` (Python,
+  pytest, ruff, mypy), `/specs`, `/fixtures` (shared recorded JSON).
+- `safeStorage` wrapper first (quota/disabled/corrupt-JSON). [External Lobe M0]
 - Define the `IntelligenceService` **types + port** and a no-op
   `LocalIntelligence` skeleton.
 - CI: `app` lane (typecheck+lint+test+build) and `backend` lane
@@ -171,6 +171,29 @@ Capturing "owe Dana the draft by Friday" records the requester + date. Friction
 **Gate/Demo:** §13 scenarios 3–6 (Activation Bridge, Anti-Paralysis, Body
 Double, Resumption) pass as component/integration tests; demo the full
 focus loop locally.
+
+---
+
+## Phase 3.5 — Ambient shell: living in the corner *(Track D / shell; ADR 0008)*
+
+**Hypothesis:** the thing that flips this into *daily use* is that it's always
+there — a corner widget I can dump into without hunting for a tab.
+
+- Wrap the existing React app in **Tauri** (no app rewrite — same code).
+- An **always-on-top, borderless compact widget** window: shows the current
+  priority/nudge + a capture input.
+- A **global hotkey** that summons capture from any app and returns focus.
+- A **system tray** icon; a separate **full-view** window opened from the widget.
+- Reach the local LLM/backend via Tauri's HTTP capability (avoid webview CORS);
+  voice degrades to text on macOS WKWebView (feature-detect).
+
+**Gate/Demo:** from inside any other app, the hotkey opens capture and a thought
+lands in < 3s; the widget shows the top task; clicking it opens the full view.
+The same React build still runs in a plain browser (host-agnostic preserved).
+
+> Placement is deliberate: after the capture + priority + focus core (P3) exists,
+> so there's something worth making ambient. Pull it **earlier** if you find you
+> won't use the core until it's in your corner; the gate travels with it.
 
 ---
 
@@ -266,13 +289,15 @@ end-to-end with services off (stubs) and on (real Jira/Neo4j/Ollama).
 ## Dependency graph
 
 ```
-P0 ─┬─► P1 (Anchor) ─────────────► P3 (cockpit) ─┐
-    ├─► P2 (capture+translator) ──────────────────┼─► P7 (sync/airlock) ─► P8 (e2e)
-    └─► P4 (Jira on belt) ─► P5 (frustration) ─► P6 (graph) ─┘
+P0 ─┬─► P1 (Anchor) ─────────────► P3 (cockpit) ─► P3.5 (Tauri shell) ─┐
+    ├─► P2 (capture+translator) ───────────────────────────────────────┼─► P7 (sync/airlock) ─► P8 (e2e)
+    └─► P4 (Jira on belt) ─► P5 (frustration) ─► P6 (graph) ────────────┘
 ```
 
 - **Frontend-first:** P1–P3 deliver the whole felt experience on `LocalIntelligence`
   with no backend.
+- **Ambient shell at P3.5** (Tauri) — depends only on the P3 core; may move
+  earlier if it's what unlocks daily use (ADR 0008).
 - **Backend enters at P4** behind the port and only deepens the data.
 - **Headline idea (frustration→surfacing) is testable at P5.**
 
@@ -284,6 +309,7 @@ P0 ─┬─► P1 (Anchor) ─────────────► P3 (cockp
 | P1 | M1, M2, M3 | — |
 | P2 | M4, M5, M6, M7, M8, M11(subset) | — |
 | P3 | M9, M10, M12, M13 | — |
+| P3.5 | (Tauri shell — new, ADR 0008) | — |
 | P4 | (adapter) | P1, P2, P4(Jira), P5(subset) |
 | P5 | (urgency bridge) | P2 scoring |
 | P6 | M14 | P3 |

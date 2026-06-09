@@ -1,7 +1,7 @@
 # Brain Dump — App Specification (backend internals)
 
 > **Partially superseded by `04-integrated-design.md`.** The frontend pivoted to
-> React/Next local-first (ADR 0001): **§8 (htmx frontend) is dead** — do not
+> local-first Vite + React (ADR 0001/0008): **§8 (htmx frontend) is dead** — do not
 > build it — and §7's FastAPI is a **JSON intelligence API only** (no HTML
 > routes, no `/ui/*`). §§1–6 (domain model, ingestion, Store Protocol, query
 > suite + scoring, Jira connector) remain the source of truth for backend

@@ -15,7 +15,8 @@
 
 ## 1. The product, in one sentence
 
-**The External Lobe** is a local-first React/Next cognitive cockpit (Pilot →
+**The External Lobe** is a local-first Vite + React cognitive cockpit (Tauri
+desktop shell; ADR 0008) (Pilot →
 Translator → Anchor) that runs fully offline; **Brain Dump** is an optional
 Python intelligence service behind it that ingests external sources (Jira,
 email), maintains a Neo4j/Chroma knowledge graph, and pushes back enrichment
