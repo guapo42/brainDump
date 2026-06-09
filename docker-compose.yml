@@ -1,0 +1,23 @@
+services:
+  neo4j:
+    image: neo4j:5
+    container_name: braindump_neo4j
+    ports:
+      - "7474:7474" # HTTP browser
+      - "7687:7687" # Bolt (Python driver)
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-change-me}
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - ./.data/neo4j:/data
+      - ./.data/neo4j-logs:/logs
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: braindump_chroma
+    ports:
+      - "8000:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+    volumes:
+      - ./.data/chroma:/chroma/data
